@@ -21,7 +21,7 @@ def create_pdf(data, sig_tech=None, sig_cust=None):
     pdf.add_page()
     pdf.set_font("Arial", size=10)
     
-    # Data Table
+    # Data Table (Tetap sama)
     pdf.cell(100, 10, f"Customer: {data['Customer']}", border=1)
     pdf.cell(90, 10, f"Report No: {data['No']}", border=1, ln=1)
     pdf.cell(100, 10, f"Machine Type: {data['Machine Type']}", border=1)
@@ -43,58 +43,37 @@ def create_pdf(data, sig_tech=None, sig_cust=None):
     
     pdf.ln(10)
 
-    # Simpan posisi Y sebelum tanda tangan
-    y_position = pdf.get_y()
-    
     # Label Tanda Tangan
     pdf.cell(90, 10, "Technician,", ln=0, align='C')
     pdf.cell(90, 10, "Customer,", ln=1, align='C')
     
-    # --- PROSES TANDA TANGAN ---
-    # Gunakan temporary buffer agar fpdf bisa membaca gambar
+    # --- PERBAIKAN PROSES TANDA TANGAN ---
+    current_y = pdf.get_y()
+
     if sig_tech:
         buf_tech = io.BytesIO()
         sig_tech.save(buf_tech, format='PNG')
         buf_tech.seek(0)
-        pdf.image(buf_tech, x=35, y=pdf.get_y(), w=30)
+        # Menambahkan parameter 'type' agar fpdf tidak mencari ekstensi file
+        pdf.image(buf_tech, x=35, y=current_y, w=30, type='PNG')
         
     if sig_cust:
         buf_cust = io.BytesIO()
         sig_cust.save(buf_cust, format='PNG')
         buf_cust.seek(0)
-        # x=135 agar sejajar di kolom kanan
-        pdf.image(buf_cust, x=135, y=pdf.get_y(), w=30)
+        # Menambahkan parameter 'type' agar fpdf tidak mencari ekstensi file
+        pdf.image(buf_cust, x=135, y=current_y, w=30, type='PNG')
     
-    pdf.ln(25) # Memberi ruang agar nama tidak menimpa tanda tangan
-    
-    # Nama Terang
-    pdf.cell(90, 10, f"( {data['Completed By']} )", ln=0, align='C')
-    pdf.cell(90, 10, f"( {data['Meet With']} )", ln=1, align='C')
-
-    output = pdf.output(dest='S')
-    return bytes(output) if not isinstance(output, str) else output.encode('latin-1')
-    # --- Bagian Tanda Tangan ---
-    y_before_sig = pdf.get_y()
-    
-    # Label
-    pdf.cell(90, 10, "Technician,", ln=0, align='C')
-    pdf.cell(90, 10, "Customer,", ln=1, align='C')
-    
-    # Memasukkan Gambar Tanda Tangan jika ada
-    if sig_tech:
-        pdf.image(sig_tech, x=30, y=pdf.get_y(), w=40)
-    if sig_cust:
-        pdf.image(sig_cust, x=130, y=pdf.get_y(), w=40)
-    
-    pdf.ln(25) # Ruang untuk gambar tanda tangan
+    pdf.ln(25) 
     
     # Nama Terang
     pdf.cell(90, 10, f"( {data['Completed By']} )", ln=0, align='C')
     pdf.cell(90, 10, f"( {data['Meet With']} )", ln=1, align='C')
 
     output = pdf.output(dest='S')
-    return bytes(output) if not isinstance(output, str) else output.encode('latin-1')
-
+    if isinstance(output, str):
+        return output.encode('latin-1')
+    return bytes(output)
 def save_to_excel(new_data):
     try:
         if os.path.exists(EXCEL_FILE):
