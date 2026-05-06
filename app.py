@@ -51,75 +51,61 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, logo_w=30, extra_items=N
     pdf.add_page()
     pdf.set_font("Arial", size=10)
     
-    # Tabel Informasi Utama
-    pdf.cell(100, 10, f"Customer: {data['Customer']}", border=1)
-    pdf.cell(90, 10, f"Report No: {data['No']}", border=1, ln=1)
+    # Tabel Informasi Utama (Urutan Sesuai Permintaan)[cite: 1]
+    pdf.cell(100, 10, f"Completed By: {data['Completed By']}", border=1)
+    pdf.cell(90, 10, f"Customer: {data['Customer']}", border=1, ln=1)
+    
+    pdf.cell(100, 10, f"Date: {data['Date']}", border=1)
+    pdf.cell(90, 10, f"Meet With: {data['Meet With']}", border=1, ln=1)
+    
     pdf.cell(100, 10, f"Machine Type: {data['Machine Type']}", border=1)
-    pdf.cell(90, 10, f"Date: {data['Date']}", border=1, ln=1)
-    pdf.cell(100, 10, f"Meet With: {data['Meet With']}", border=1)
-    pdf.cell(90, 10, f"Completed By: {data['Completed By']}", border=1, ln=1)
+    pdf.cell(90, 10, f"Machine No: {data['Machine No']}", border=1, ln=1)
+    
+    pdf.cell(190, 10, f"Service Report No: {data['No']}", border=1, ln=1)
     
     pdf.ln(5)
     
-    # Problem Description
+    # Deskripsi Masalah & Tindakan[cite: 1]
     pdf.set_font("Arial", 'B', 10)
     pdf.cell(0, 10, "Problem Description:", ln=1)
     pdf.set_font("Arial", size=10)
     pdf.multi_cell(0, 10, data['Problem'], border=1)
     
     pdf.ln(5)
-    
-    # Report / Follow Up Action
     pdf.set_font("Arial", 'B', 10)
     pdf.cell(0, 10, "Report / Follow Up Action:", ln=1)
     pdf.set_font("Arial", size=10)
     pdf.multi_cell(0, 10, data['Follow Up'], border=1)
     
-    # --- LOGIKA GAMBAR BERDAMPINGAN ---
+    # Logika Gambar Berdampingan[cite: 1]
     if extra_items:
         pdf.ln(5)
-        # Filter hanya item yang punya file gambar
         valid_items = [item for item in extra_items if item['file']]
+        x_start, current_x, max_row_height = 15, 15, 0
         
-        x_start = 15
-        current_x = x_start
-        max_row_height = 0
-        
-        for i, item in enumerate(valid_items):
-            # Cek jika gambar baru akan melebihi batas kanan (195mm)
+        for item in valid_items:
             if current_x + item['width'] > 195:
-                pdf.set_y(pdf.get_y() + max_row_height + 10) # Pindah baris
-                current_x = x_start
-                max_row_height = 0
-
-            # Cek sisa ruang halaman vertikal
+                pdf.set_y(pdf.get_y() + max_row_height + 10)
+                current_x, max_row_height = x_start, 0
             if pdf.get_y() > 220:
                 pdf.add_page()
                 current_x = x_start
             
-            # Gambar
             img_y = pdf.get_y()
             pdf.image(item['file'], x=current_x, y=img_y, w=item['width'])
-            
-            # Keterangan di bawah gambar masing-masing
             pdf.set_xy(current_x, img_y + (item['width'] / 1.5) + 2)
             pdf.set_font("Arial", 'I', 8)
             pdf.multi_cell(item['width'], 4, f"Ket: {item['caption']}", align='L')
             
-            # Update posisi X untuk gambar selanjutnya
             current_x += item['width'] + 10
-            
-            # Catat tinggi baris tertinggi untuk spasi baris berikutnya
             row_h = (item['width'] / 1.5) + 15
-            if row_h > max_row_height:
-                max_row_height = row_h
+            if row_h > max_row_height: max_row_height = row_h
         
-        # Reset posisi Y setelah semua gambar selesai
         pdf.set_y(pdf.get_y() + max_row_height)
 
     pdf.ln(10)
     
-    # Tanda Tangan
+    # Tanda Tangan[cite: 1]
     if pdf.get_y() > 240: pdf.add_page()
     pdf.cell(90, 10, "Technician,", align='C')
     pdf.cell(90, 10, "Customer,", ln=1, align='C')
@@ -134,17 +120,17 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, logo_w=30, extra_items=N
 
     return bytes(pdf.output())
 
-# --- UI STREAMLIT TETAP SAMA ---
+# 5. ANTARMUKA STREAMLIT[cite: 1]
 st.set_page_config(page_title="Service Report System", layout="centered")
 st.title("Digital Service Report")
 
-# Sidebar Pengaturan
+# Sidebar Pengaturan[cite: 1]
 st.sidebar.header("Kop & Dokumentasi")
 uploaded_logo = st.sidebar.file_uploader("Logo Kop Surat", type=["png", "jpg", "jpeg"])
 logo_w = st.sidebar.slider("Lebar Logo (mm)", 10, 100, 30)
 
 st.sidebar.divider()
-st.sidebar.subheader("Foto & Keterangan")
+st.sidebar.subheader("Foto Dokumentasi")
 img1 = st.sidebar.file_uploader("Foto 1", type=["png", "jpg", "jpeg"], key="f1")
 cap1 = st.sidebar.text_input("Keterangan Foto 1", key="c1")
 w1 = st.sidebar.slider("Lebar Foto 1 (mm)", 20, 180, 80, key="w1")
@@ -153,16 +139,18 @@ img2 = st.sidebar.file_uploader("Foto 2", type=["png", "jpg", "jpeg"], key="f2")
 cap2 = st.sidebar.text_input("Keterangan Foto 2", key="c2")
 w2 = st.sidebar.slider("Lebar Foto 2 (mm)", 20, 180, 80, key="w2")
 
+# Formulir Utama (Urutan Sesuai Permintaan)[cite: 1]
 with st.form("main_form"):
     col1, col2 = st.columns(2)
     with col1:
-        report_no = st.text_input("Service Report No")
-        completed_by = st.text_input("Completed By")
-        report_date = st.date_input("Date", value=date.today())
-    with col2:
+        completed_by = st.text_input("Completed By (Teknisi)")
         customer = st.text_input("Customer", value="PT. Finpac Anugerah Indonesia")
         machine_type = st.text_input("Machine Type")
-        meet_with = st.text_input("Meet With")
+        report_no = st.text_input("Service Report No")
+    with col2:
+        report_date = st.date_input("Date", value=date.today())
+        meet_with = st.text_input("Meet With (PIC)")
+        machine_no = st.text_input("Machine No")
 
     problem = st.text_area("Problem Description")
     follow_up = st.text_area("Report / Follow Up Action")
@@ -178,23 +166,23 @@ with st.form("main_form"):
 
     submitted = st.form_submit_button("Simpan & Proses PDF")
 
+# 6. LOGIKA SUBMIT[cite: 1]
 if submitted:
-    if not report_no:
-        st.error("Nomor Report wajib diisi!")
+    if not completed_by or not customer:
+        st.error("Mohon lengkapi data Teknisi dan Customer!")
     else:
         logo_img = Image.open(uploaded_logo) if uploaded_logo else None
         extra_items = [
             {'file': Image.open(img1) if img1 else None, 'caption': cap1, 'width': w1},
             {'file': Image.open(img2) if img2 else None, 'caption': cap2, 'width': w2}
         ]
-        
         img_t = Image.fromarray(c_tech.image_data.astype('uint8'), 'RGBA') if c_tech.image_data is not None else None
         img_c = Image.fromarray(c_cust.image_data.astype('uint8'), 'RGBA') if c_cust.image_data is not None else None
             
         report_data = {
             "No": report_no, "Completed By": completed_by, "Date": str(report_date),
             "Customer": customer, "Meet With": meet_with, "Machine Type": machine_type,
-            "Problem": problem, "Follow Up": follow_up
+            "Machine No": machine_no, "Problem": problem, "Follow Up": follow_up
         }
         
         if save_to_excel(report_data):
@@ -202,8 +190,9 @@ if submitted:
                 'last_data': report_data, 'sig_t': img_t, 'sig_c': img_c,
                 'logo': logo_img, 'logo_w': logo_w, 'extra_items': extra_items
             })
-            st.success("Data berhasil disimpan!")
+            st.success("Laporan Berhasil Disimpan!")
 
+# 7. DOWNLOAD PDF[cite: 1]
 if 'last_data' in st.session_state:
     st.divider()
     try:
