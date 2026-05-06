@@ -3,79 +3,68 @@ import pandas as pd
 from datetime import date
 from fpdf import FPDF
 import os
+from streamlit_drawable_canvas import st_canvas
+from PIL import Image
+import io
 
-# Konfigurasi nama file
+# Konfigurasi file
 EXCEL_FILE = "service_reports.xlsx"
 
-# --- Kelas PDF untuk Layout Laporan ---
 class PDF(FPDF):
     def header(self):
-        # Header Laporan
         self.set_font('Arial', 'B', 14)
         self.cell(0, 10, 'SERVICE REPORT', 1, 1, 'C')
         self.ln(5)
 
-def create_pdf(data):
+def create_pdf(data, sig_tech=None, sig_cust=None):
     pdf = PDF()
     pdf.add_page()
     pdf.set_font("Arial", size=10)
     
-    # Tabel Informasi Header
+    # Data Table
     pdf.cell(100, 10, f"Customer: {data['Customer']}", border=1)
     pdf.cell(90, 10, f"Report No: {data['No']}", border=1, ln=1)
-    
     pdf.cell(100, 10, f"Machine Type: {data['Machine Type']}", border=1)
     pdf.cell(90, 10, f"Date: {data['Date']}", border=1, ln=1)
-    
     pdf.cell(100, 10, f"Meet With: {data['Meet With']}", border=1)
     pdf.cell(90, 10, f"Completed By: {data['Completed By']}", border=1, ln=1)
     
     pdf.ln(5)
-    
-    # Bagian Problem
     pdf.set_font("Arial", 'B', 10)
     pdf.cell(0, 10, "Problem:", ln=1)
     pdf.set_font("Arial", size=10)
     pdf.multi_cell(0, 10, data['Problem'], border=1)
     
     pdf.ln(5)
-    
-    # Bagian Follow Up
     pdf.set_font("Arial", 'B', 10)
     pdf.cell(0, 10, "Report / Follow Up:", ln=1)
     pdf.set_font("Arial", size=10)
     pdf.multi_cell(0, 10, data['Follow Up'], border=1)
     
-    pdf.ln(25) # Ruang untuk tanda tangan
+    pdf.ln(10)
 
-    # --- Kolom Tanda Tangan ---
-    current_y = pdf.get_y()
+    # --- Bagian Tanda Tangan ---
+    y_before_sig = pdf.get_y()
     
-    # Kolom Kiri (Teknisi)
-    pdf.set_xy(10, current_y)
+    # Label
     pdf.cell(90, 10, "Technician,", ln=0, align='C')
-    
-    # Kolom Kanan (Customer)
-    pdf.set_xy(110, current_y)
     pdf.cell(90, 10, "Customer,", ln=1, align='C')
     
-    pdf.ln(20) # Ruang tanda tangan basah
+    # Memasukkan Gambar Tanda Tangan jika ada
+    if sig_tech:
+        pdf.image(sig_tech, x=30, y=pdf.get_y(), w=40)
+    if sig_cust:
+        pdf.image(sig_cust, x=130, y=pdf.get_y(), w=40)
+    
+    pdf.ln(25) # Ruang untuk gambar tanda tangan
     
     # Nama Terang
-    final_y = pdf.get_y()
-    pdf.set_xy(10, final_y)
     pdf.cell(90, 10, f"( {data['Completed By']} )", ln=0, align='C')
-    
-    pdf.set_xy(110, final_y)
     pdf.cell(90, 10, f"( {data['Meet With']} )", ln=1, align='C')
 
-    # Konversi ke bytes untuk download Streamlit
     output = pdf.output(dest='S')
-    if isinstance(output, str):
-        return output.encode('latin-1')
-    return bytes(output)
+    return bytes(output) if not isinstance(output, str) else output.encode('latin-1')
 
-# --- Fungsi Penyimpanan Data ---
 def save_to_excel(new_data):
     try:
         if os.path.exists(EXCEL_FILE):
@@ -83,70 +72,97 @@ def save_to_excel(new_data):
             df = pd.concat([df, pd.DataFrame([new_data])], ignore_index=True)
         else:
             df = pd.DataFrame([new_data])
-        
         df.to_excel(EXCEL_FILE, index=False)
         return True
     except PermissionError:
-        st.error(f"⚠️ Gagal menyimpan! Tutup file '{EXCEL_FILE}' di Excel terlebih dahulu.")
-        return False
-    except Exception as e:
-        st.error(f"Terjadi kesalahan: {e}")
+        st.error(f"⚠️ Tutup file '{EXCEL_FILE}' di Excel!")
         return False
 
-# --- Tampilan Utama Streamlit ---
-st.set_page_config(page_title="Service Report System", layout="centered")
-st.title("Input Service Report")
+# --- UI Streamlit ---
+st.set_page_config(page_title="Service Report Digital Sign", layout="centered")
+st.title("Service Report & Digital Signature")
 
-with st.form("form_laporan"):
+with st.form("main_form"):
     col1, col2 = st.columns(2)
-    
     with col1:
         report_no = st.text_input("Service Report No")
         completed_by = st.text_input("Completed By (Teknisi)")
         report_date = st.date_input("Date", value=date.today())
-        
     with col2:
         customer = st.text_input("Customer", value="PT. Finpac Anugerah Indonesia")
-        machine_type = st.text_input("Machine Type (Kilian/Romaco)")
-        meet_with = st.text_input("Meet With (PIC Customer)")
+        machine_type = st.text_input("Machine Type")
+        meet_with = st.text_input("Meet With (PIC)")
 
     problem = st.text_area("Problem Description")
     follow_up = st.text_area("Report / Follow Up Action")
+    
+    st.write("---")
+    # Area Tanda Tangan
+    col_sig1, col_sig2 = st.columns(2)
+    
+    with col_sig1:
+        st.write("Tanda Tangan Teknisi:")
+        canvas_tech = st_canvas(
+            fill_color="rgba(255, 255, 255, 0)",
+            stroke_width=2,
+            stroke_color="#000000",
+            background_color="#eeeeee",
+            height=150,
+            width=300,
+            key="canvas_tech",
+        )
+        
+    with col_sig2:
+        st.write("Tanda Tangan Customer:")
+        canvas_cust = st_canvas(
+            fill_color="rgba(255, 255, 255, 0)",
+            stroke_width=2,
+            stroke_color="#000000",
+            background_color="#eeeeee",
+            height=150,
+            width=300,
+            key="canvas_cust",
+        )
 
-    # Tombol submit harus berada di dalam blok 'with st.form'
-    submitted = st.form_submit_button("Simpan Data & Buat PDF")
+    submitted = st.form_submit_button("Simpan & Proses Laporan")
 
-# Proses setelah tombol diklik
 if submitted:
     if not report_no or not completed_by:
-        st.warning("Mohon isi nomor laporan dan nama teknisi.")
+        st.error("Isi Nomor Report dan Nama Teknisi!")
     else:
+        # Proses Gambar Tanda Tangan
+        sig_tech_img = None
+        sig_cust_img = None
+        
+        if canvas_tech.image_data is not None:
+            sig_tech_img = Image.fromarray(canvas_tech.image_data.astype('uint8'), 'RGBA')
+        if canvas_cust.image_data is not None:
+            sig_cust_img = Image.fromarray(canvas_cust.image_data.astype('uint8'), 'RGBA')
+            
         report_data = {
-            "No": report_no,
-            "Completed By": completed_by,
-            "Date": str(report_date),
-            "Customer": customer,
-            "Meet With": meet_with,
-            "Machine Type": machine_type,
-            "Problem": problem,
-            "Follow Up": follow_up
+            "No": report_no, "Completed By": completed_by, "Date": str(report_date),
+            "Customer": customer, "Meet With": meet_with, "Machine Type": machine_type,
+            "Problem": problem, "Follow Up": follow_up
         }
         
         if save_to_excel(report_data):
             st.session_state['last_report'] = report_data
-            st.success(f"Data Berhasil Disimpan ke {EXCEL_FILE}!")
+            st.session_state['sig_tech'] = sig_tech_img
+            st.session_state['sig_cust'] = sig_cust_img
+            st.success("Data dan Tanda Tangan Berhasil Diproses!")
 
-# Bagian Download PDF
 if 'last_report' in st.session_state:
     st.divider()
-    st.subheader("Opsi Unduhan")
-    try:
-        pdf_bytes = create_pdf(st.session_state['last_report'])
-        st.download_button(
-            label="⬇️ Download Report (PDF)",
-            data=pdf_bytes,
-            file_name=f"Report_{st.session_state['last_report']['No']}.pdf",
-            mime="application/pdf"
-        )
-    except Exception as e:
-        st.error(f"Gagal membuat PDF: {e}")
+    # Buat PDF dengan gambar tanda tangan
+    pdf_bytes = create_pdf(
+        st.session_state['last_report'], 
+        st.session_state['sig_tech'], 
+        st.session_state['sig_cust']
+    )
+    
+    st.download_button(
+        label="⬇️ Download PDF dengan Tanda Tangan",
+        data=pdf_bytes,
+        file_name=f"Report_{st.session_state['last_report']['No']}.pdf",
+        mime="application/pdf"
+    )
