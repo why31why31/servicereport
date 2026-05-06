@@ -80,7 +80,7 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, logo_w=30, extra_items=N
     pdf.set_font("Arial", size=10)
     pdf.multi_cell(0, 10, data['Follow Up'], border=1)
     
-# --- LOGIKA FIX: GAMBAR BERDAMPINGAN & KETERANGAN DINAMIS ---
+# --- LOGIKA FINAL: GAMBAR BERDAMPINGAN & KETERANGAN DINAMIS ---
     if extra_items:
         pdf.ln(5)
         valid_items = [item for item in extra_items if item['file']]
@@ -92,12 +92,13 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, logo_w=30, extra_items=N
         
         for item in valid_items:
             img_w = item['width']
-            img_h = img_w / 1.5  # Rasio gambar
+            img_h = img_w / 1.5
             
             # 1. Cek jika harus pindah baris (Horizontal)
             if current_x + img_w > 195:
-                # Pindah posisi Y ke bawah elemen tertinggi di baris sebelumnya
-                start_y += max_row_height + 10 
+                # Turunkan start_y ke bawah elemen tertinggi di baris sebelumnya
+                pdf.set_y(start_y + max_row_height + 10)
+                start_y = pdf.get_y()
                 current_x = x_start
                 max_row_height = 0
 
@@ -107,30 +108,29 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, logo_w=30, extra_items=N
                 start_y = 20 
                 current_x = x_start
 
-            # 3. Masukkan Gambar di posisi X dan Y saat ini
+            # 3. Gambar (Selalu gunakan start_y baris ini)
             pdf.image(item['file'], x=current_x, y=start_y, w=img_w)
             
-            # 4. Tulis Keterangan tepat di bawah gambar MASING-MASING
-            # Kita atur posisi Y secara spesifik untuk item ini
+            # 4. Keterangan (Posisikan tepat di bawah gambar)
             pdf.set_xy(current_x, start_y + img_h + 2)
             pdf.set_font("Arial", 'I', 8)
-            
-            # multi_cell akan menyesuaikan teks dengan lebar gambar
             pdf.multi_cell(img_w, 4, f"Ket: {item['caption']}", align='L')
             
-            # 5. Hitung tinggi total yang digunakan oleh item ini (gambar + keterangan)
-            # pdf.get_y() setelah multi_cell akan memberi tahu kita posisi akhir teks
+            # 5. Hitung tinggi total elemen ini (Gambar + Teks)
+            # pdf.get_y() sekarang menunjuk ke bawah teks keterangan
             current_item_bottom = pdf.get_y()
             current_item_total_h = current_item_bottom - start_y
             
-            # Simpan tinggi elemen tertinggi di baris ini untuk spasi baris berikutnya
             if current_item_total_h > max_row_height:
                 max_row_height = current_item_total_h
             
-            # 6. Update posisi X untuk gambar di sebelahnya (beri jarak 5mm)
+            # 6. Geser X untuk gambar berikutnya
             current_x += img_w + 5
+            
+            # PENTING: Kembalikan kursor Y ke start_y agar gambar selanjutnya tidak turun
+            pdf.set_y(start_y)
         
-        # Pindahkan kursor global ke bawah seluruh baris gambar tertinggi
+        # Setelah loop selesai, pindahkan kursor Y ke bawah baris gambar tertinggi
         pdf.set_y(start_y + max_row_height + 5)
     
     # Tanda Tangan
