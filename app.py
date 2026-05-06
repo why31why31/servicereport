@@ -28,19 +28,19 @@ def save_to_excel(new_data):
         df.to_excel(EXCEL_FILE, index=False)
         return True
     except PermissionError:
-        st.error(f"⚠️ Gagal menyimpan! Mohon tutup file '{EXCEL_FILE}' di Excel.")
+        st.error(f"⚠️ Tutup file '{EXCEL_FILE}' di Excel terlebih dahulu!")
         return False
     except Exception as e:
         st.error(f"Terjadi kesalahan: {e}")
         return False
 
-# 4. FUNGSI PEMBUATAN PDF
+# 4. FUNGSI PEMBUATAN PDF[cite: 1]
 def create_pdf(data, sig_t=None, sig_c=None):
     pdf = PDF()
     pdf.add_page()
     pdf.set_font("Arial", size=10)
     
-    # Tabel Informasi Utama
+    # Tabel Informasi Utama[cite: 1]
     pdf.cell(100, 10, f"Customer: {data['Customer']}", border=1)
     pdf.cell(90, 10, f"Report No: {data['No']}", border=1, ln=1)
     pdf.cell(100, 10, f"Machine Type: {data['Machine Type']}", border=1)
@@ -50,7 +50,7 @@ def create_pdf(data, sig_t=None, sig_c=None):
     
     pdf.ln(5)
     
-    # Masalah & Tindakan
+    # Masalah & Tindakan[cite: 1]
     pdf.set_font("Arial", 'B', 10)
     pdf.cell(0, 10, "Problem Description:", ln=1)
     pdf.set_font("Arial", size=10)
@@ -64,13 +64,13 @@ def create_pdf(data, sig_t=None, sig_c=None):
     
     pdf.ln(10)
     
-    # Label Tanda Tangan
+    # Label Tanda Tangan[cite: 1]
     pdf.cell(90, 10, "Technician,", align='C')
     pdf.cell(90, 10, "Customer,", ln=1, align='C')
     
     sig_y = pdf.get_y()
     
-    # Memasukkan Gambar Tanda Tangan
+    # Memasukkan Gambar Tanda Tangan (Mendukung Transparansi)[cite: 1]
     if sig_t:
         pdf.image(sig_t, x=40, y=sig_y, w=30)
     if sig_c:
@@ -78,16 +78,17 @@ def create_pdf(data, sig_t=None, sig_c=None):
     
     pdf.ln(25)
     
-    # Nama Terang
+    # Nama Terang[cite: 1]
     pdf.cell(90, 10, f"( {data['Completed By']} )", align='C')
     pdf.cell(90, 10, f"( {data['Meet With']} )", ln=1, align='C')
 
+    # Kembalikan dalam format bytes[cite: 1]
     return bytes(pdf.output())
 
-# 5. ANTARMUKA STREAMLIT (UI)
+# 5. ANTARMUKA STREAMLIT (UI)[cite: 1]
 st.set_page_config(page_title="Service Report System", layout="centered")
 st.title("Digital Service Report")
-st.info("Input data servis untuk PT. Finpac Anugerah Indonesia.")
+st.info("Input data servis untuk PT. Finpac Anugerah Indonesia.")[cite: 1]
 
 with st.form("main_form"):
     col1, col2 = st.columns(2)
@@ -105,22 +106,37 @@ with st.form("main_form"):
     
     st.divider()
     
-    # Area Tanda Tangan Digital
+    # Area Tanda Tangan Digital dengan Background Transparan[cite: 1]
     col_sig1, col_sig2 = st.columns(2)
     with col_sig1:
         st.write("Tanda Tangan Teknisi:")
-        c_tech = st_canvas(stroke_width=2, stroke_color="#000", background_color="#eee", height=150, width=300, key="c_t")
+        c_tech = st_canvas(
+            stroke_width=2, 
+            stroke_color="#000", 
+            background_color="rgba(0,0,0,0)", # Transparan[cite: 1]
+            height=150, 
+            width=300, 
+            key="c_t"
+        )
     with col_sig2:
         st.write("Tanda Tangan Customer:")
-        c_cust = st_canvas(stroke_width=2, stroke_color="#000", background_color="#eee", height=150, width=300, key="c_c")
+        c_cust = st_canvas(
+            stroke_width=2, 
+            stroke_color="#000", 
+            background_color="rgba(0,0,0,0)", # Transparan[cite: 1]
+            height=150, 
+            width=300, 
+            key="c_c"
+        )
 
     submitted = st.form_submit_button("Simpan Data & Buat Laporan")
 
-# 6. LOGIKA SETELAH TOMBOL DIKLIK
+# 6. LOGIKA SETELAH SUBMIT[cite: 1]
 if submitted:
     if not report_no or not completed_by:
         st.warning("Nomor Report dan Nama Teknisi tidak boleh kosong!")
     else:
+        # Konversi ke PIL Image dengan mode RGBA[cite: 1]
         img_t = Image.fromarray(c_tech.image_data.astype('uint8'), 'RGBA') if c_tech.image_data is not None else None
         img_c = Image.fromarray(c_cust.image_data.astype('uint8'), 'RGBA') if c_cust.image_data is not None else None
             
@@ -136,7 +152,7 @@ if submitted:
             st.session_state['sig_c'] = img_c
             st.success("Laporan berhasil disimpan!")
 
-# 7. TOMBOL DOWNLOAD
+# 7. TOMBOL DOWNLOAD[cite: 1]
 if 'last_data' in st.session_state:
     st.divider()
     try:
