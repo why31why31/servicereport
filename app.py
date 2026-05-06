@@ -59,61 +59,71 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, logo_w=30, extra_items=N
     pdf.cell(95, 10, f"Machine: {data['Machine']}", border=1)
     pdf.cell(95, 10, f"Date: {data['Date']}", border=1, ln=1)
     pdf.cell(95, 10, f"Meet With: {data['Meet With']}", border=1)
+    
+    # Type dan Serial No
     pdf.cell(47.5, 10, f"Type: {data['Type']}", border=1)
     pdf.cell(47.5, 10, f"Serial No: {data['Serial No']}", border=1, ln=1)
     
     pdf.ln(5)
     
-    # Deskripsi Masalah & Tindakan
+    # Deskripsi Masalah
     pdf.set_font("Arial", 'B', 10)
     pdf.cell(0, 10, "Problem Description:", ln=1)
     pdf.set_font("Arial", size=10)
     pdf.multi_cell(0, 10, data['Problem'], border=1)
+    
     pdf.ln(5)
+    
+    # Tindakan / Follow Up
     pdf.set_font("Arial", 'B', 10)
     pdf.cell(0, 10, "Report / Follow Up Action:", ln=1)
     pdf.set_font("Arial", size=10)
     pdf.multi_cell(0, 10, data['Follow Up'], border=1)
     
-    # --- LOGIKA GAMBAR BERDAMPINGAN & KETERANGAN ---
+    # --- LOGIKA FIX: GAMBAR BERDAMPINGAN & KETERANGAN ---
     if extra_items:
         pdf.ln(5)
         valid_items = [item for item in extra_items if item['file']]
-        x_start, current_x, max_row_height = 15, 15, 0
+        
+        x_start = 15
+        current_x = x_start
+        max_row_height = 0
         start_y = pdf.get_y()
         
         for item in valid_items:
-            # Pindah baris jika tidak muat secara horizontal
-            if current_x + item['width'] > 195:
-                pdf.set_y(start_y + max_row_height + 10)
-                start_y = pdf.get_y()
-                current_x, max_row_height = x_start, 0
+            img_w = item['width']
+            img_h = img_w / 1.5  # Asumsi rasio 3:2
+            
+            # Cek jika harus pindah baris
+            if current_x + img_w > 195:
+                start_y += max_row_height + 10
+                current_x = x_start
+                max_row_height = 0
 
-            # Pindah halaman jika tidak muat secara vertikal
-            if pdf.get_y() > 220:
+            # Cek jika harus pindah halaman
+            if start_y + img_h > 250:
                 pdf.add_page()
-                start_y = pdf.get_y()
+                start_y = 20 # Margin atas halaman baru
                 current_x = x_start
 
             # Masukkan Gambar
-            pdf.image(item['file'], x=current_x, y=start_y, w=item['width'])
+            pdf.image(item['file'], x=current_x, y=start_y, w=img_w)
             
-            # Hitung tinggi gambar (rasio standar 3:2)
-            img_h = item['width'] / 1.5
-            
-            # Pindahkan kursor ke bawah gambar untuk menulis keterangan
+            # Tulis Keterangan tepat di bawah gambar
             pdf.set_xy(current_x, start_y + img_h + 2)
             pdf.set_font("Arial", 'I', 8)
-            pdf.multi_cell(item['width'], 4, f"Ket: {item['caption']}", align='L')
+            pdf.multi_cell(img_w, 4, f"Ket: {item['caption']}", align='L')
             
-            # Update posisi X dan tinggi baris
-            current_x += item['width'] + 5
-            item_total_h = img_h + 12
-            if item_total_h > max_row_height:
-                max_row_height = item_total_h
+            # Update posisi X untuk gambar di sebelahnya
+            current_x += img_w + 5
+            
+            # Hitung tinggi baris (gambar + teks)
+            current_total_h = img_h + 10
+            if current_total_h > max_row_height:
+                max_row_height = current_total_h
         
-        # Reset posisi Y akhir agar tidak menimpa tanda tangan
-        pdf.set_y(start_y + max_row_height + 5)
+        # Pindahkan kursor ke bawah seluruh baris gambar
+        pdf.set_y(start_y + max_row_height + 10)
 
     pdf.ln(10)
     
@@ -132,7 +142,7 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, logo_w=30, extra_items=N
 
     return bytes(pdf.output())
 
-# 5. ANTARMUKA STREAMLIT
+# 5. UI STREAMLIT
 st.set_page_config(page_title="Service Report System", layout="centered")
 st.title("Digital Service Report")
 
@@ -179,8 +189,8 @@ with st.form("main_form"):
 
 # 6. LOGIKA SUBMIT
 if submitted:
-    if not completed_by or not customer:
-        st.error("Data Teknisi dan Customer wajib diisi!")
+    if not completed_by:
+        st.error("Nama Teknisi wajib diisi!")
     else:
         logo_img = Image.open(uploaded_logo) if uploaded_logo else None
         extra_items = [
@@ -201,7 +211,7 @@ if submitted:
                 'last_data': report_data, 'sig_t': img_t, 'sig_c': img_c,
                 'logo': logo_img, 'logo_w': logo_w, 'extra_items': extra_items
             })
-            st.success("Laporan Berhasil Disimpan!")
+            st.success("Berhasil Disimpan!")
 
 # 7. DOWNLOAD
 if 'last_data' in st.session_state:
