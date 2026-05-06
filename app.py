@@ -19,7 +19,6 @@ class PDF(FPDF):
 
     def header(self):
         if self.logo_img:
-            # Memasukkan logo ke Kop Surat
             self.image(self.logo_img, x=10, y=8, w=self.logo_w)
             self.set_x(10 + self.logo_w + 5)
         
@@ -47,7 +46,7 @@ def save_to_excel(new_data):
         return False
 
 # 4. FUNGSI PEMBUATAN PDF
-def create_pdf(data, sig_t=None, sig_c=None, logo=None, logo_w=30):
+def create_pdf(data, sig_t=None, sig_c=None, logo=None, logo_w=30, extra_imgs=None):
     pdf = PDF(logo_img=logo, logo_w=logo_w)
     pdf.add_page()
     pdf.set_font("Arial", size=10)
@@ -62,34 +61,44 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, logo_w=30):
     
     pdf.ln(5)
     
-    # Masalah & Tindakan
+    # Problem Description
     pdf.set_font("Arial", 'B', 10)
     pdf.cell(0, 10, "Problem Description:", ln=1)
     pdf.set_font("Arial", size=10)
     pdf.multi_cell(0, 10, data['Problem'], border=1)
     
     pdf.ln(5)
+    
+    # Report / Follow Up Action
     pdf.set_font("Arial", 'B', 10)
     pdf.cell(0, 10, "Report / Follow Up Action:", ln=1)
     pdf.set_font("Arial", size=10)
     pdf.multi_cell(0, 10, data['Follow Up'], border=1)
     
+    # --- INSERT EXTRA IMAGES ---
+    if extra_imgs:
+        pdf.ln(5)
+        for img_info in extra_imgs:
+            if img_info['file']:
+                # Memastikan gambar tidak keluar halaman
+                if pdf.get_y() > 230: 
+                    pdf.add_page()
+                pdf.image(img_info['file'], x=15, y=pdf.get_y(), w=img_info['width'])
+                pdf.ln(img_info['width'] / 1.5) # Beri jarak setelah gambar
+                pdf.ln(5)
+
     pdf.ln(10)
     
-    # Label Tanda Tangan
+    # Tanda Tangan
+    if pdf.get_y() > 250: pdf.add_page()
     pdf.cell(90, 10, "Technician,", align='C')
     pdf.cell(90, 10, "Customer,", ln=1, align='C')
     
     sig_y = pdf.get_y()
-    
-    if sig_t:
-        pdf.image(sig_t, x=40, y=sig_y, w=30)
-    if sig_c:
-        pdf.image(sig_c, x=140, y=sig_y, w=30)
+    if sig_t: pdf.image(sig_t, x=40, y=sig_y, w=30)
+    if sig_c: pdf.image(sig_c, x=140, y=sig_y, w=30)
     
     pdf.ln(25)
-    
-    # Nama Terang
     pdf.cell(90, 10, f"( {data['Completed By']} )", align='C')
     pdf.cell(90, 10, f"( {data['Meet With']} )", ln=1, align='C')
 
@@ -99,12 +108,19 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, logo_w=30):
 st.set_page_config(page_title="Service Report System", layout="centered")
 st.title("Digital Service Report")
 
-# Sidebar untuk Logo
-st.sidebar.header("Pengaturan Kop Surat")
+# Sidebar Pengaturan
+st.sidebar.header("Pengaturan Kop & Gambar")
 uploaded_logo = st.sidebar.file_uploader("Upload Logo Perusahaan", type=["png", "jpg", "jpeg"])
-logo_width = st.sidebar.slider("Ukuran Lebar Logo (mm)", 10, 100, 30)
+logo_width = st.sidebar.slider("Ukuran Logo (mm)", 10, 100, 30)
 
-st.info("Input data servis untuk PT. Finpac Anugerah Indonesia.")
+st.sidebar.divider()
+st.sidebar.subheader("Gambar Tambahan (Follow-up)")
+img1 = st.sidebar.file_uploader("Foto 1", type=["png", "jpg", "jpeg"], key="img1")
+w1 = st.sidebar.slider("Lebar Foto 1 (mm)", 20, 180, 80, key="w1")
+img2 = st.sidebar.file_uploader("Foto 2", type=["png", "jpg", "jpeg"], key="img2")
+w2 = st.sidebar.slider("Lebar Foto 2 (mm)", 20, 180, 80, key="w2")
+
+st.info("Laporan Servis Mesin - Wahyudi") # Mengacu pada User Summary
 
 with st.form("main_form"):
     col1, col2 = st.columns(2)
@@ -118,40 +134,32 @@ with st.form("main_form"):
         meet_with = st.text_input("Meet With (PIC)")
 
     problem = st.text_area("Problem Description")
-    follow_up = st.text_area("Report / Follow Up Action")
+    follow_up = st.text_area("Report / Follow Up Action (Gunakan spasi baris untuk jarak gambar)")
     
     st.divider()
     
     col_sig1, col_sig2 = st.columns(2)
     with col_sig1:
         st.write("Tanda Tangan Teknisi:")
-        c_tech = st_canvas(
-            stroke_width=2, 
-            stroke_color="#000", 
-            background_color="rgba(0,0,0,0)", 
-            height=150, 
-            width=300, 
-            key="c_t"
-        )
+        c_tech = st_canvas(stroke_width=2, stroke_color="#000", background_color="rgba(0,0,0,0)", height=150, width=300, key="c_t")
     with col_sig2:
         st.write("Tanda Tangan Customer:")
-        c_cust = st_canvas(
-            stroke_width=2, 
-            stroke_color="#000", 
-            background_color="rgba(0,0,0,0)", 
-            height=150, 
-            width=300, 
-            key="c_c"
-        )
+        c_cust = st_canvas(stroke_width=2, stroke_color="#000", background_color="rgba(0,0,0,0)", height=150, width=300, key="c_c")
 
     submitted = st.form_submit_button("Simpan Data & Buat Laporan")
 
 # 6. LOGIKA SETELAH SUBMIT
 if submitted:
     if not report_no or not completed_by:
-        st.warning("Nomor Report dan Nama Teknisi tidak boleh kosong!")
+        st.warning("Nomor Report dan Nama Teknisi wajib diisi!")
     else:
-        final_logo = Image.open(uploaded_logo) if uploaded_logo else None
+        # Proses Gambar
+        logo_img = Image.open(uploaded_logo) if uploaded_logo else None
+        extra_photos = [
+            {'file': Image.open(img1) if img1 else None, 'width': w1},
+            {'file': Image.open(img2) if img2 else None, 'width': w2}
+        ]
+        
         img_t = Image.fromarray(c_tech.image_data.astype('uint8'), 'RGBA') if c_tech.image_data is not None else None
         img_c = Image.fromarray(c_cust.image_data.astype('uint8'), 'RGBA') if c_cust.image_data is not None else None
             
@@ -165,8 +173,9 @@ if submitted:
             st.session_state['last_data'] = report_data
             st.session_state['sig_t'] = img_t
             st.session_state['sig_c'] = img_c
-            st.session_state['logo'] = final_logo
+            st.session_state['logo'] = logo_img
             st.session_state['logo_w'] = logo_width
+            st.session_state['extra_photos'] = extra_photos
             st.success("Laporan berhasil disimpan!")
 
 # 7. TOMBOL DOWNLOAD
@@ -178,7 +187,8 @@ if 'last_data' in st.session_state:
             st.session_state['sig_t'], 
             st.session_state['sig_c'],
             logo=st.session_state.get('logo'),
-            logo_w=st.session_state.get('logo_w', 30)
+            logo_w=st.session_state.get('logo_w', 30),
+            extra_imgs=st.session_state.get('extra_photos')
         )
         st.download_button(
             label="⬇️ Download PDF Service Report",
