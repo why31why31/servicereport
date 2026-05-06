@@ -19,81 +19,98 @@ def create_pdf(data):
     pdf.set_font("Arial", size=10)
     
     # Header Information Table
-    pdf.cell(100, 10, f"Customer: {data['Customer']}", border=1)[cite: 1]
-    pdf.cell(90, 10, f"Report No: {data['No']}", border=1, ln=1)[cite: 1]
+    pdf.cell(100, 10, f"Customer: {data['Customer']}", border=1)
+    pdf.cell(90, 10, f"Report No: {data['No']}", border=1, ln=1)
     
-    pdf.cell(100, 10, f"Machine Type: {data['Machine Type']}", border=1)[cite: 1]
-    pdf.cell(90, 10, f"Date: {data['Date']}", border=1, ln=1)[cite: 1]
+    pdf.cell(100, 10, f"Machine Type: {data['Machine Type']}", border=1)
+    pdf.cell(90, 10, f"Date: {data['Date']}", border=1, ln=1)
     
-    pdf.cell(100, 10, f"Meet With: {data['Meet With']}", border=1)[cite: 1]
-    pdf.cell(90, 10, f"Completed By: {data['Completed By']}", border=1, ln=1)[cite: 1]
+    pdf.cell(100, 10, f"Meet With: {data['Meet With']}", border=1)
+    pdf.cell(90, 10, f"Completed By: {data['Completed By']}", border=1, ln=1)
     
     pdf.ln(5)
     
     # Problem Section
     pdf.set_font("Arial", 'B', 10)
-    pdf.cell(0, 10, "Problem:", ln=1)[cite: 1]
+    pdf.cell(0, 10, "Problem:", ln=1)
     pdf.set_font("Arial", size=10)
-    pdf.multi_cell(0, 10, data['Problem'], border=1)[cite: 1]
+    pdf.multi_cell(0, 10, data['Problem'], border=1)
     
     pdf.ln(5)
     
     # Follow Up Section
     pdf.set_font("Arial", 'B', 10)
-    pdf.cell(0, 10, "Report / Follow Up:", ln=1)[cite: 1]
+    pdf.cell(0, 10, "Report / Follow Up:", ln=1)
     pdf.set_font("Arial", size=10)
-    pdf.multi_cell(0, 10, data['Follow Up'], border=1)[cite: 1]
+    pdf.multi_cell(0, 10, data['Follow Up'], border=1)
     
-    return pdf.output(dest='S').encode('latin-1')
-
+    # FIX: Check if the output is already bytes, otherwise convert it
+    output = pdf.output(dest='S')
+    if isinstance(output, str):
+        return output.encode('latin-1')
+    return bytes(output)
 def save_to_excel(new_data):
     if os.path.exists(EXCEL_FILE):
         df = pd.read_excel(EXCEL_FILE)
         df = pd.concat([df, pd.DataFrame([new_data])], ignore_index=True)
     else:
         df = pd.DataFrame([new_data])
-    df.to_excel(EXCEL_FILE, index=False)[cite: 1]
+    df.to_excel(EXCEL_FILE, index=False)
 
-# Streamlit UI
-st.title("Service Report System")
+# --- Streamlit UI ---
+st.title("Service Report Entry System")
 
-with st.form("report_form"):
+# Start of the form
+with st.form("main_service_form"):
     col1, col2 = st.columns(2)
-    with col1:
-        report_no = st.text_input("Service Report No")[cite: 1]
-        completed_by = st.text_input("Completed By")[cite: 1]
-        report_date = st.date_input("Date", value=date.today())[cite: 1]
-    with col2:
-        customer = st.text_input("Customer", value="PT. Finpac Anugerah Indonesia")[cite: 1]
-        machine_type = st.text_input("Machine Type")[cite: 1]
-        meet_with = st.text_input("Meet With")[cite: 1]
-
-    problem = st.text_area("Problem")[cite: 1]
-    follow_up = st.text_area("Report/ Follow Up")[cite: 1]
     
-    submitted = st.form_submit_button("Save & Prepare PDF")
+    with col1:
+        report_no = st.text_input("Service Report No")
+        completed_by = st.text_input("Completed By")
+        report_date = st.date_input("Date", value=date.today())
+        
+    with col2:
+        customer = st.text_input("Customer", value="PT. Finpac Anugerah Indonesia")
+        machine_type = st.text_input("Machine Type")
+        meet_with = st.text_input("Meet With")
 
+    problem = st.text_area("Problem Description")
+    follow_up = st.text_area("Report / Follow Up Action")
+
+    # This is the button that MUST be inside the 'with st.form' block
+    submitted = st.form_submit_button("Save Report & Generate PDF")
+
+# Processing after submission
 if submitted:
-    report_data = {
-        "No": report_no,
-        "Completed By": completed_by,
-        "Date": str(report_date),
-        "Customer": customer,
-        "Meet With": meet_with,
-        "Machine Type": machine_type,
-        "Problem": problem,
-        "Follow Up": follow_up
-    }
-    save_to_excel(report_data)
-    st.session_state['last_report'] = report_data
-    st.success("Data saved to Excel!")[cite: 1]
+    if not report_no:
+        st.error("Please enter a Report Number.")
+    else:
+        report_data = {
+            "No": report_no,
+            "Completed By": completed_by,
+            "Date": str(report_date),
+            "Customer": customer,
+            "Meet With": meet_with,
+            "Machine Type": machine_type,
+            "Problem": problem,
+            "Follow Up": follow_up
+        }
+        
+        # Save to Excel
+        save_to_excel(report_data)
+        st.session_state['last_report'] = report_data
+        st.success(f"Report {report_no} saved to Excel!")
 
-# Download Section
+# Show download button if a report was just saved
 if 'last_report' in st.session_state:
-    pdf_bytes = create_pdf(st.session_state['last_report'])
-    st.download_button(
-        label="Download Report as PDF",
-        data=pdf_bytes,
-        file_name=f"Service_Report_{st.session_state['last_report']['No']}.pdf",
-        mime="application/pdf"
-    )
+    st.info("Your report is ready for download.")
+    try:
+        pdf_bytes = create_pdf(st.session_state['last_report'])
+        st.download_button(
+            label="Download PDF Report",
+            data=pdf_bytes,
+            file_name=f"Service_Report_{st.session_state['last_report']['No']}.pdf",
+            mime="application/pdf"
+        )
+    except Exception as e:
+        st.error(f"Error creating PDF: {e}")
