@@ -51,21 +51,21 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, logo_w=30, extra_items=N
     pdf.add_page()
     pdf.set_font("Arial", size=10)
     
-    # Tabel Informasi Utama (Urutan Sesuai Permintaan)[cite: 1]
-    pdf.cell(100, 10, f"Completed By: {data['Completed By']}", border=1)
-    pdf.cell(90, 10, f"Customer: {data['Customer']}", border=1, ln=1)
+    # Tabel Informasi Utama (Urutan Sesuai Permintaan)
+    pdf.cell(95, 10, f"Completed By: {data['Completed By']}", border=1)
+    pdf.cell(95, 10, f"Customer: {data['Customer']}", border=1, ln=1)
     
-    pdf.cell(100, 10, f"Date: {data['Date']}", border=1)
-    pdf.cell(90, 10, f"Meet With: {data['Meet With']}", border=1, ln=1)
+    pdf.cell(95, 10, f"Machine: {data['Machine']}", border=1)
+    pdf.cell(95, 10, f"Date: {data['Date']}", border=1, ln=1)
     
-    pdf.cell(100, 10, f"Machine Type: {data['Machine Type']}", border=1)
-    pdf.cell(90, 10, f"Machine No: {data['Machine No']}", border=1, ln=1)
+    pdf.cell(95, 10, f"Meet With: {data['Meet With']}", border=1)
+    pdf.cell(95, 10, f"Type: {data['Type']}", border=1, ln=1)
     
-    pdf.cell(190, 10, f"Service Report No: {data['No']}", border=1, ln=1)
+    pdf.cell(190, 10, f"Serial No: {data['Serial No']}", border=1, ln=1)
     
     pdf.ln(5)
     
-    # Deskripsi Masalah & Tindakan[cite: 1]
+    # Deskripsi Masalah & Tindakan
     pdf.set_font("Arial", 'B', 10)
     pdf.cell(0, 10, "Problem Description:", ln=1)
     pdf.set_font("Arial", size=10)
@@ -77,7 +77,7 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, logo_w=30, extra_items=N
     pdf.set_font("Arial", size=10)
     pdf.multi_cell(0, 10, data['Follow Up'], border=1)
     
-    # Logika Gambar Berdampingan[cite: 1]
+    # Logika Gambar Berdampingan
     if extra_items:
         pdf.ln(5)
         valid_items = [item for item in extra_items if item['file']]
@@ -105,26 +105,26 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, logo_w=30, extra_items=N
 
     pdf.ln(10)
     
-    # Tanda Tangan[cite: 1]
+    # Tanda Tangan
     if pdf.get_y() > 240: pdf.add_page()
-    pdf.cell(90, 10, "Technician,", align='C')
-    pdf.cell(90, 10, "Customer,", ln=1, align='C')
+    pdf.cell(95, 10, "Technician,", align='C')
+    pdf.cell(95, 10, "Customer,", ln=1, align='C')
     
     sig_y = pdf.get_y()
-    if sig_t: pdf.image(sig_t, x=40, y=sig_y, w=30)
-    if sig_c: pdf.image(sig_c, x=140, y=sig_y, w=30)
+    if sig_t: pdf.image(sig_t, x=42, y=sig_y, w=30)
+    if sig_c: pdf.image(sig_c, x=138, y=sig_y, w=30)
     
     pdf.ln(25)
-    pdf.cell(90, 10, f"( {data['Completed By']} )", align='C')
-    pdf.cell(90, 10, f"( {data['Meet With']} )", ln=1, align='C')
+    pdf.cell(95, 10, f"( {data['Completed By']} )", align='C')
+    pdf.cell(95, 10, f"( {data['Meet With']} )", ln=1, align='C')
 
     return bytes(pdf.output())
 
-# 5. ANTARMUKA STREAMLIT[cite: 1]
+# 5. ANTARMUKA STREAMLIT
 st.set_page_config(page_title="Service Report System", layout="centered")
 st.title("Digital Service Report")
 
-# Sidebar Pengaturan[cite: 1]
+# Sidebar Pengaturan
 st.sidebar.header("Kop & Dokumentasi")
 uploaded_logo = st.sidebar.file_uploader("Logo Kop Surat", type=["png", "jpg", "jpeg"])
 logo_w = st.sidebar.slider("Lebar Logo (mm)", 10, 100, 30)
@@ -139,19 +139,19 @@ img2 = st.sidebar.file_uploader("Foto 2", type=["png", "jpg", "jpeg"], key="f2")
 cap2 = st.sidebar.text_input("Keterangan Foto 2", key="c2")
 w2 = st.sidebar.slider("Lebar Foto 2 (mm)", 20, 180, 80, key="w2")
 
-# Formulir Utama (Urutan Sesuai Permintaan)[cite: 1]
+# Formulir Utama (Urutan Baru)
 with st.form("main_form"):
     col1, col2 = st.columns(2)
     with col1:
         completed_by = st.text_input("Completed By (Teknisi)")
         customer = st.text_input("Customer", value="PT. Finpac Anugerah Indonesia")
-        machine_type = st.text_input("Machine Type")
-        report_no = st.text_input("Service Report No")
+        machine = st.text_input("Machine (e.g. Kilian)")
     with col2:
         report_date = st.date_input("Date", value=date.today())
         meet_with = st.text_input("Meet With (PIC)")
-        machine_no = st.text_input("Machine No")
+        m_type = st.text_input("Type (e.g. Tablet Press)")
 
+    serial_no = st.text_input("Serial No")
     problem = st.text_area("Problem Description")
     follow_up = st.text_area("Report / Follow Up Action")
     
@@ -166,7 +166,7 @@ with st.form("main_form"):
 
     submitted = st.form_submit_button("Simpan & Proses PDF")
 
-# 6. LOGIKA SUBMIT[cite: 1]
+# 6. LOGIKA SUBMIT
 if submitted:
     if not completed_by or not customer:
         st.error("Mohon lengkapi data Teknisi dan Customer!")
@@ -180,9 +180,9 @@ if submitted:
         img_c = Image.fromarray(c_cust.image_data.astype('uint8'), 'RGBA') if c_cust.image_data is not None else None
             
         report_data = {
-            "No": report_no, "Completed By": completed_by, "Date": str(report_date),
-            "Customer": customer, "Meet With": meet_with, "Machine Type": machine_type,
-            "Machine No": machine_no, "Problem": problem, "Follow Up": follow_up
+            "Completed By": completed_by, "Customer": customer, "Machine": machine,
+            "Date": str(report_date), "Meet With": meet_with, "Type": m_type,
+            "Serial No": serial_no, "Problem": problem, "Follow Up": follow_up
         }
         
         if save_to_excel(report_data):
@@ -192,7 +192,7 @@ if submitted:
             })
             st.success("Laporan Berhasil Disimpan!")
 
-# 7. DOWNLOAD PDF[cite: 1]
+# 7. DOWNLOAD PDF
 if 'last_data' in st.session_state:
     st.divider()
     try:
@@ -204,6 +204,6 @@ if 'last_data' in st.session_state:
             logo_w=st.session_state.get('logo_w', 30),
             extra_items=st.session_state.get('extra_items')
         )
-        st.download_button(label="⬇️ Download PDF", data=pdf_file, file_name=f"Report_{st.session_state['last_data']['No']}.pdf", mime="application/pdf")
+        st.download_button(label="⬇️ Download PDF", data=pdf_file, file_name=f"Report_{st.session_state['last_data']['Serial No']}.pdf", mime="application/pdf")
     except Exception as e:
         st.error(f"Gagal memproses PDF: {e}")
