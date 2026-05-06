@@ -77,34 +77,50 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, logo_w=30, extra_items=N
     pdf.set_font("Arial", size=10)
     pdf.multi_cell(0, 10, data['Follow Up'], border=1)
     
-    # Logika Gambar Berdampingan
+# --- LOGIKA GAMBAR BERDAMPINGAN (PERBAIKAN) ---
     if extra_items:
         pdf.ln(5)
         valid_items = [item for item in extra_items if item['file']]
-        x_start, current_x, max_row_height = 15, 15, 0
+        
+        x_start = 15
+        current_x = x_start
+        # Simpan posisi Y awal baris ini
+        start_y = pdf.get_y() 
+        max_row_height = 0
         
         for item in valid_items:
+            # Jika gambar tidak muat di sisa lebar baris, pindah ke baris bawahnya
             if current_x + item['width'] > 195:
-                pdf.set_y(pdf.get_y() + max_row_height + 10)
-                current_x, max_row_height = x_start, 0
+                pdf.set_y(start_y + max_row_height + 10)
+                start_y = pdf.get_y()
+                current_x = x_start
+                max_row_height = 0
+
+            # Cek sisa ruang halaman (jika sudah di bawah, pindah halaman baru)
             if pdf.get_y() > 220:
                 pdf.add_page()
+                start_y = pdf.get_y()
                 current_x = x_start
+
+            # Masukkan gambar di posisi X dan Y yang sudah dikunci
+            pdf.image(item['file'], x=current_x, y=start_y, w=item['width'])
             
-            img_y = pdf.get_y()
-            pdf.image(item['file'], x=current_x, y=img_y, w=item['width'])
-            pdf.set_xy(current_x, img_y + (item['width'] / 1.5) + 2)
+            # Tulis keterangan tepat di bawah gambar tersebut
+            img_height = item['width'] / 1.5
+            pdf.set_xy(current_x, start_y + img_height + 2)
             pdf.set_font("Arial", 'I', 8)
             pdf.multi_cell(item['width'], 4, f"Ket: {item['caption']}", align='L')
             
-            current_x += item['width'] + 10
-            row_h = (item['width'] / 1.5) + 15
-            if row_h > max_row_height: max_row_height = row_h
-        
-        pdf.set_y(pdf.get_y() + max_row_height)
-
-    pdf.ln(10)
-    
+            # Hitung tinggi ruang yang terpakai (gambar + teks)
+            current_item_height = img_height + 12
+            if current_item_height > max_row_height:
+                max_row_height = current_item_height
+            
+            # Geser posisi X untuk gambar selanjutnya (beri jarak 5mm)
+            current_x += item['width'] + 5
+            
+        # Setelah semua gambar selesai, letakkan kursor Y di bawah gambar tertinggi
+        pdf.set_y(start_y + max_row_height + 5)    
     # Tanda Tangan
     if pdf.get_y() > 240: pdf.add_page()
     pdf.cell(95, 10, "Technician,", align='C')
