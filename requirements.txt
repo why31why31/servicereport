@@ -1,6 +1,6 @@
 streamlit
 pandas
 openpyxl
-fpdf
+fpdf2
 streamlit-drawable-canvas
 Pillow
