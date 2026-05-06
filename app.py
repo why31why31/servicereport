@@ -51,7 +51,7 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, logo_w=30, extra_items=N
     pdf.add_page()
     pdf.set_font("Arial", size=10)
     
-    # Tabel Informasi Utama (Urutan Sesuai Permintaan)
+    # Tabel Informasi Utama (Serial No sudah pindah ke sebelah Type)
     pdf.cell(95, 10, f"Completed By: {data['Completed By']}", border=1)
     pdf.cell(95, 10, f"Customer: {data['Customer']}", border=1, ln=1)
     
@@ -59,9 +59,10 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, logo_w=30, extra_items=N
     pdf.cell(95, 10, f"Date: {data['Date']}", border=1, ln=1)
     
     pdf.cell(95, 10, f"Meet With: {data['Meet With']}", border=1)
-    pdf.cell(95, 10, f"Type: {data['Type']}", border=1, ln=1)
+    pdf.cell(47.5, 10, f"Type: {data['Type']}", border=1)
+    pdf.cell(47.5, 10, f"Serial No: {data['Serial No']}", border=1, ln=1)
     
-    pdf.cell(190, 10, f"Serial No: {data['Serial No']}", border=1, ln=1)
+    pdf.cell(190, 10, f"Service Report No: {data['No']}", border=1, ln=1)
     
     pdf.ln(5)
     
@@ -139,7 +140,7 @@ img2 = st.sidebar.file_uploader("Foto 2", type=["png", "jpg", "jpeg"], key="f2")
 cap2 = st.sidebar.text_input("Keterangan Foto 2", key="c2")
 w2 = st.sidebar.slider("Lebar Foto 2 (mm)", 20, 180, 80, key="w2")
 
-# Formulir Utama (Urutan Baru)
+# Formulir Utama (Urutan Input Sesuai Permintaan)
 with st.form("main_form"):
     col1, col2 = st.columns(2)
     with col1:
@@ -149,9 +150,14 @@ with st.form("main_form"):
     with col2:
         report_date = st.date_input("Date", value=date.today())
         meet_with = st.text_input("Meet With (PIC)")
-        m_type = st.text_input("Type (e.g. Tablet Press)")
+        # Type dan Serial No dalam satu baris
+        sub_col1, sub_col2 = st.columns(2)
+        with sub_col1:
+            m_type = st.text_input("Type")
+        with sub_col2:
+            serial_no = st.text_input("Serial No")
 
-    serial_no = st.text_input("Serial No")
+    report_no = st.text_input("Service Report No")
     problem = st.text_area("Problem Description")
     follow_up = st.text_area("Report / Follow Up Action")
     
@@ -182,7 +188,7 @@ if submitted:
         report_data = {
             "Completed By": completed_by, "Customer": customer, "Machine": machine,
             "Date": str(report_date), "Meet With": meet_with, "Type": m_type,
-            "Serial No": serial_no, "Problem": problem, "Follow Up": follow_up
+            "Serial No": serial_no, "No": report_no, "Problem": problem, "Follow Up": follow_up
         }
         
         if save_to_excel(report_data):
