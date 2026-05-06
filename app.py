@@ -43,6 +43,36 @@ def create_pdf(data, sig_tech=None, sig_cust=None):
     
     pdf.ln(10)
 
+    # Simpan posisi Y sebelum tanda tangan
+    y_position = pdf.get_y()
+    
+    # Label Tanda Tangan
+    pdf.cell(90, 10, "Technician,", ln=0, align='C')
+    pdf.cell(90, 10, "Customer,", ln=1, align='C')
+    
+    # --- PROSES TANDA TANGAN ---
+    # Gunakan temporary buffer agar fpdf bisa membaca gambar
+    if sig_tech:
+        buf_tech = io.BytesIO()
+        sig_tech.save(buf_tech, format='PNG')
+        buf_tech.seek(0)
+        pdf.image(buf_tech, x=35, y=pdf.get_y(), w=30)
+        
+    if sig_cust:
+        buf_cust = io.BytesIO()
+        sig_cust.save(buf_cust, format='PNG')
+        buf_cust.seek(0)
+        # x=135 agar sejajar di kolom kanan
+        pdf.image(buf_cust, x=135, y=pdf.get_y(), w=30)
+    
+    pdf.ln(25) # Memberi ruang agar nama tidak menimpa tanda tangan
+    
+    # Nama Terang
+    pdf.cell(90, 10, f"( {data['Completed By']} )", ln=0, align='C')
+    pdf.cell(90, 10, f"( {data['Meet With']} )", ln=1, align='C')
+
+    output = pdf.output(dest='S')
+    return bytes(output) if not isinstance(output, str) else output.encode('latin-1')
     # --- Bagian Tanda Tangan ---
     y_before_sig = pdf.get_y()
     
