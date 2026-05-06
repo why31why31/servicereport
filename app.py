@@ -19,14 +19,14 @@ class PDF(FPDF):
 
     def header(self):
         if self.logo_img:
-            # Memasukkan logo yang diunggah ke Kop Surat
+            # Memasukkan logo ke Kop Surat
             self.image(self.logo_img, x=10, y=8, w=self.logo_w)
-            self.set_x(10 + self.logo_w + 5) # Geser teks agar tidak menimpa logo
+            self.set_x(10 + self.logo_w + 5)
         
         self.set_font('Arial', 'B', 14)
-        self.cell(0, 10, 'SERVICE REPORT', 0, 1, 'R') # Judul rata kanan jika ada logo
+        self.cell(0, 10, 'SERVICE REPORT', 0, 1, 'R')
         self.ln(10)
-        self.line(10, self.get_y(), 200, self.get_y()) # Garis pembatas kop surat
+        self.line(10, self.get_y(), 200, self.get_y())
         self.ln(5)
 
 # 3. FUNGSI PENYIMPANAN EXCEL
@@ -97,14 +97,14 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, logo_w=30):
 
 # 5. ANTARMUKA STREAMLIT (UI)
 st.set_page_config(page_title="Service Report System", layout="centered")
-st.title("Digital Service Report with Custom Logo")
+st.title("Digital Service Report")
 
-# Bagian Pengaturan Kop Surat (Diluar Form agar interaktif)
+# Sidebar untuk Logo
 st.sidebar.header("Pengaturan Kop Surat")
 uploaded_logo = st.sidebar.file_uploader("Upload Logo Perusahaan", type=["png", "jpg", "jpeg"])
 logo_width = st.sidebar.slider("Ukuran Lebar Logo (mm)", 10, 100, 30)
 
-st.info("Input data servis untuk PT. Finpac Anugerah Indonesia.")[cite: 1]
+st.info("Input data servis untuk PT. Finpac Anugerah Indonesia.")
 
 with st.form("main_form"):
     col1, col2 = st.columns(2)
@@ -125,10 +125,24 @@ with st.form("main_form"):
     col_sig1, col_sig2 = st.columns(2)
     with col_sig1:
         st.write("Tanda Tangan Teknisi:")
-        c_tech = st_canvas(stroke_width=2, stroke_color="#000", background_color="rgba(0,0,0,0)", height=150, width=300, key="c_t")
+        c_tech = st_canvas(
+            stroke_width=2, 
+            stroke_color="#000", 
+            background_color="rgba(0,0,0,0)", 
+            height=150, 
+            width=300, 
+            key="c_t"
+        )
     with col_sig2:
         st.write("Tanda Tangan Customer:")
-        c_cust = st_canvas(stroke_width=2, stroke_color="#000", background_color="rgba(0,0,0,0)", height=150, width=300, key="c_c")
+        c_cust = st_canvas(
+            stroke_width=2, 
+            stroke_color="#000", 
+            background_color="rgba(0,0,0,0)", 
+            height=150, 
+            width=300, 
+            key="c_c"
+        )
 
     submitted = st.form_submit_button("Simpan Data & Buat Laporan")
 
@@ -137,11 +151,7 @@ if submitted:
     if not report_no or not completed_by:
         st.warning("Nomor Report dan Nama Teknisi tidak boleh kosong!")
     else:
-        # Proses Logo jika ada
-        final_logo = None
-        if uploaded_logo:
-            final_logo = Image.open(uploaded_logo)
-
+        final_logo = Image.open(uploaded_logo) if uploaded_logo else None
         img_t = Image.fromarray(c_tech.image_data.astype('uint8'), 'RGBA') if c_tech.image_data is not None else None
         img_c = Image.fromarray(c_cust.image_data.astype('uint8'), 'RGBA') if c_cust.image_data is not None else None
             
