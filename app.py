@@ -39,19 +39,19 @@ def save_to_excel(new_data):
         df.to_excel(EXCEL_FILE, index=False)
         return True
     except PermissionError:
-        st.error(f"⚠️ Gagal menyimpan! Mohon tutup file '{EXCEL_FILE}' di Excel.")
+        st.error(f"⚠️ Tutup file '{EXCEL_FILE}' di Excel!")
         return False
     except Exception as e:
-        st.error(f"Terjadi kesalahan: {e}")
+        st.error(f"Kesalahan: {e}")
         return False
 
 # 4. FUNGSI PEMBUATAN PDF
-def create_pdf(data, sig_t=None, sig_c=None, logo=None, logo_w=30, extra_imgs=None):
+def create_pdf(data, sig_t=None, sig_c=None, logo=None, logo_w=30, extra_items=None):
     pdf = PDF(logo_img=logo, logo_w=logo_w)
     pdf.add_page()
     pdf.set_font("Arial", size=10)
     
-    # Tabel Informasi Utama
+    # Header Info
     pdf.cell(100, 10, f"Customer: {data['Customer']}", border=1)
     pdf.cell(90, 10, f"Report No: {data['No']}", border=1, ln=1)
     pdf.cell(100, 10, f"Machine Type: {data['Machine Type']}", border=1)
@@ -61,7 +61,7 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, logo_w=30, extra_imgs=No
     
     pdf.ln(5)
     
-    # Problem Description
+    # Problem
     pdf.set_font("Arial", 'B', 10)
     pdf.cell(0, 10, "Problem Description:", ln=1)
     pdf.set_font("Arial", size=10)
@@ -69,28 +69,34 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, logo_w=30, extra_imgs=No
     
     pdf.ln(5)
     
-    # Report / Follow Up Action
+    # Report / Follow Up (Teks Utama)
     pdf.set_font("Arial", 'B', 10)
     pdf.cell(0, 10, "Report / Follow Up Action:", ln=1)
     pdf.set_font("Arial", size=10)
     pdf.multi_cell(0, 10, data['Follow Up'], border=1)
     
-    # --- INSERT EXTRA IMAGES ---
-    if extra_imgs:
-        pdf.ln(5)
-        for img_info in extra_imgs:
-            if img_info['file']:
-                # Memastikan gambar tidak keluar halaman
-                if pdf.get_y() > 230: 
-                    pdf.add_page()
-                pdf.image(img_info['file'], x=15, y=pdf.get_y(), w=img_info['width'])
-                pdf.ln(img_info['width'] / 1.5) # Beri jarak setelah gambar
+    # --- MENYISIPKAN GAMBAR DAN KETERANGAN ---
+    if extra_items:
+        for item in extra_items:
+            if item['file']:
                 pdf.ln(5)
+                # Cek sisa ruang halaman
+                if pdf.get_y() > 200: pdf.add_page()
+                
+                # Gambar
+                pdf.image(item['file'], x=15, y=pdf.get_y(), w=item['width'])
+                pdf.ln(item['width'] / 1.5 + 2) 
+                
+                # Keterangan Gambar
+                if item['caption']:
+                    pdf.set_font("Arial", 'I', 9)
+                    pdf.multi_cell(0, 5, f"Ket: {item['caption']}", align='L')
+                    pdf.ln(5)
 
     pdf.ln(10)
     
     # Tanda Tangan
-    if pdf.get_y() > 250: pdf.add_page()
+    if pdf.get_y() > 240: pdf.add_page()
     pdf.cell(90, 10, "Technician,", align='C')
     pdf.cell(90, 10, "Customer,", ln=1, align='C')
     
@@ -104,40 +110,41 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, logo_w=30, extra_imgs=No
 
     return bytes(pdf.output())
 
-# 5. ANTARMUKA STREAMLIT (UI)
+# 5. UI STREAMLIT
 st.set_page_config(page_title="Service Report System", layout="centered")
-st.title("Digital Service Report")
+st.title("Digital Service Report with Captions")
 
 # Sidebar Pengaturan
-st.sidebar.header("Pengaturan Kop & Gambar")
-uploaded_logo = st.sidebar.file_uploader("Upload Logo Perusahaan", type=["png", "jpg", "jpeg"])
-logo_width = st.sidebar.slider("Ukuran Logo (mm)", 10, 100, 30)
+st.sidebar.header("Kop & Dokumentasi")
+uploaded_logo = st.sidebar.file_uploader("Logo Kop Surat", type=["png", "jpg", "jpeg"])
+logo_w = st.sidebar.slider("Lebar Logo (mm)", 10, 100, 30)
 
 st.sidebar.divider()
-st.sidebar.subheader("Gambar Tambahan (Follow-up)")
-img1 = st.sidebar.file_uploader("Foto 1", type=["png", "jpg", "jpeg"], key="img1")
+st.sidebar.subheader("Foto & Keterangan")
+# Foto 1
+img1 = st.sidebar.file_uploader("Foto 1", type=["png", "jpg", "jpeg"], key="f1")
+cap1 = st.sidebar.text_input("Keterangan Foto 1", key="c1")
 w1 = st.sidebar.slider("Lebar Foto 1 (mm)", 20, 180, 80, key="w1")
-img2 = st.sidebar.file_uploader("Foto 2", type=["png", "jpg", "jpeg"], key="img2")
+# Foto 2
+img2 = st.sidebar.file_uploader("Foto 2", type=["png", "jpg", "jpeg"], key="f2")
+cap2 = st.sidebar.text_input("Keterangan Foto 2", key="c2")
 w2 = st.sidebar.slider("Lebar Foto 2 (mm)", 20, 180, 80, key="w2")
-
-st.info("Laporan Servis Mesin - Wahyudi") # Mengacu pada User Summary
 
 with st.form("main_form"):
     col1, col2 = st.columns(2)
     with col1:
         report_no = st.text_input("Service Report No")
-        completed_by = st.text_input("Completed By (Teknisi)")
+        completed_by = st.text_input("Completed By")
         report_date = st.date_input("Date", value=date.today())
     with col2:
         customer = st.text_input("Customer", value="PT. Finpac Anugerah Indonesia")
         machine_type = st.text_input("Machine Type")
-        meet_with = st.text_input("Meet With (PIC)")
+        meet_with = st.text_input("Meet With")
 
     problem = st.text_area("Problem Description")
-    follow_up = st.text_area("Report / Follow Up Action (Gunakan spasi baris untuk jarak gambar)")
+    follow_up = st.text_area("Initial Report / General Follow Up")
     
     st.divider()
-    
     col_sig1, col_sig2 = st.columns(2)
     with col_sig1:
         st.write("Tanda Tangan Teknisi:")
@@ -146,18 +153,18 @@ with st.form("main_form"):
         st.write("Tanda Tangan Customer:")
         c_cust = st_canvas(stroke_width=2, stroke_color="#000", background_color="rgba(0,0,0,0)", height=150, width=300, key="c_c")
 
-    submitted = st.form_submit_button("Simpan Data & Buat Laporan")
+    submitted = st.form_submit_button("Simpan & Proses PDF")
 
-# 6. LOGIKA SETELAH SUBMIT
+# 6. LOGIKA SUBMIT
 if submitted:
-    if not report_no or not completed_by:
-        st.warning("Nomor Report dan Nama Teknisi wajib diisi!")
+    if not report_no:
+        st.error("Nomor Report wajib diisi!")
     else:
         # Proses Gambar
         logo_img = Image.open(uploaded_logo) if uploaded_logo else None
-        extra_photos = [
-            {'file': Image.open(img1) if img1 else None, 'width': w1},
-            {'file': Image.open(img2) if img2 else None, 'width': w2}
+        extra_items = [
+            {'file': Image.open(img1) if img1 else None, 'caption': cap1, 'width': w1},
+            {'file': Image.open(img2) if img2 else None, 'caption': cap2, 'width': w2}
         ]
         
         img_t = Image.fromarray(c_tech.image_data.astype('uint8'), 'RGBA') if c_tech.image_data is not None else None
@@ -170,15 +177,13 @@ if submitted:
         }
         
         if save_to_excel(report_data):
-            st.session_state['last_data'] = report_data
-            st.session_state['sig_t'] = img_t
-            st.session_state['sig_c'] = img_c
-            st.session_state['logo'] = logo_img
-            st.session_state['logo_w'] = logo_width
-            st.session_state['extra_photos'] = extra_photos
-            st.success("Laporan berhasil disimpan!")
+            st.session_state.update({
+                'last_data': report_data, 'sig_t': img_t, 'sig_c': img_c,
+                'logo': logo_img, 'logo_w': logo_w, 'extra_items': extra_items
+            })
+            st.success("Data berhasil disimpan!")
 
-# 7. TOMBOL DOWNLOAD
+# 7. DOWNLOAD
 if 'last_data' in st.session_state:
     st.divider()
     try:
@@ -188,13 +193,8 @@ if 'last_data' in st.session_state:
             st.session_state['sig_c'],
             logo=st.session_state.get('logo'),
             logo_w=st.session_state.get('logo_w', 30),
-            extra_imgs=st.session_state.get('extra_photos')
+            extra_items=st.session_state.get('extra_items')
         )
-        st.download_button(
-            label="⬇️ Download PDF Service Report",
-            data=pdf_file,
-            file_name=f"Report_{st.session_state['last_data']['No']}.pdf",
-            mime="application/pdf"
-        )
+        st.download_button(label="⬇️ Download PDF", data=pdf_file, file_name=f"Report_{st.session_state['last_data']['No']}.pdf", mime="application/pdf")
     except Exception as e:
         st.error(f"Gagal memproses PDF: {e}")
