@@ -18,16 +18,17 @@ class PDF(FPDF):
         self.logo_w = logo_w
 
     def header(self):
-        if self.logo_img:
-            # Memasukkan logo ke Kop Surat
-            self.image(self.logo_img, x=10, y=8, w=self.logo_w)
-            self.set_x(10 + self.logo_w + 5)
-        
-        self.set_font('Arial', 'B', 14)
-        self.cell(0, 10, 'SERVICE REPORT', 0, 1, 'R')
-        self.ln(10)
-        self.line(10, self.get_y(), 200, self.get_y())
-        self.ln(5)
+        # Kop surat hanya muncul di halaman 1
+        if self.page_no() == 1:
+            if self.logo_img:
+                self.image(self.logo_img, x=10, y=8, w=self.logo_w)
+                self.set_x(10 + self.logo_w + 5)
+            
+            self.set_font('Arial', 'B', 14)
+            self.cell(0, 10, 'SERVICE REPORT', 0, 1, 'R')
+            self.ln(10)
+            self.line(10, self.get_y(), 200, self.get_y())
+            self.ln(5)
 
 # 3. FUNGSI PENYIMPANAN EXCEL
 def save_to_excel(new_data):
@@ -40,7 +41,7 @@ def save_to_excel(new_data):
         df.to_excel(EXCEL_FILE, index=False)
         return True
     except PermissionError:
-        st.error(f"⚠️ Gagal! Tutup file '{EXCEL_FILE}' di Excel.")
+        st.error(f"⚠️ Tutup file '{EXCEL_FILE}' di Excel!")
         return False
     except Exception as e:
         st.error(f"Error: {e}")
@@ -52,13 +53,11 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, logo_w=30, extra_items=N
     pdf.add_page()
     pdf.set_font("Arial", size=10)
     
-    # Tabel Informasi Utama (Kolom Service Report No telah dihapus)
+    # Tabel Informasi Utama
     pdf.cell(95, 10, f"Completed By: {data['Completed By']}", border=1)
     pdf.cell(95, 10, f"Customer: {data['Customer']}", border=1, ln=1)
-    
     pdf.cell(95, 10, f"Machine: {data['Machine']}", border=1)
     pdf.cell(95, 10, f"Date: {data['Date']}", border=1, ln=1)
-    
     pdf.cell(95, 10, f"Meet With: {data['Meet With']}", border=1)
     pdf.cell(47.5, 10, f"Type: {data['Type']}", border=1)
     pdf.cell(47.5, 10, f"Serial No: {data['Serial No']}", border=1, ln=1)
@@ -70,57 +69,54 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, logo_w=30, extra_items=N
     pdf.cell(0, 10, "Problem Description:", ln=1)
     pdf.set_font("Arial", size=10)
     pdf.multi_cell(0, 10, data['Problem'], border=1)
-    
     pdf.ln(5)
     pdf.set_font("Arial", 'B', 10)
     pdf.cell(0, 10, "Report / Follow Up Action:", ln=1)
     pdf.set_font("Arial", size=10)
     pdf.multi_cell(0, 10, data['Follow Up'], border=1)
     
-# --- LOGIKA GAMBAR BERDAMPINGAN (PERBAIKAN) ---
+    # --- LOGIKA GAMBAR BERDAMPINGAN & KETERANGAN ---
     if extra_items:
         pdf.ln(5)
         valid_items = [item for item in extra_items if item['file']]
-        
-        x_start = 15
-        current_x = x_start
-        # Simpan posisi Y awal baris ini
-        start_y = pdf.get_y() 
-        max_row_height = 0
+        x_start, current_x, max_row_height = 15, 15, 0
+        start_y = pdf.get_y()
         
         for item in valid_items:
-            # Jika gambar tidak muat di sisa lebar baris, pindah ke baris bawahnya
+            # Pindah baris jika tidak muat secara horizontal
             if current_x + item['width'] > 195:
                 pdf.set_y(start_y + max_row_height + 10)
                 start_y = pdf.get_y()
-                current_x = x_start
-                max_row_height = 0
+                current_x, max_row_height = x_start, 0
 
-            # Cek sisa ruang halaman (jika sudah di bawah, pindah halaman baru)
+            # Pindah halaman jika tidak muat secara vertikal
             if pdf.get_y() > 220:
                 pdf.add_page()
                 start_y = pdf.get_y()
                 current_x = x_start
 
-            # Masukkan gambar di posisi X dan Y yang sudah dikunci
+            # Masukkan Gambar
             pdf.image(item['file'], x=current_x, y=start_y, w=item['width'])
             
-            # Tulis keterangan tepat di bawah gambar tersebut
-            img_height = item['width'] / 1.5
-            pdf.set_xy(current_x, start_y + img_height + 2)
+            # Hitung tinggi gambar (rasio standar 3:2)
+            img_h = item['width'] / 1.5
+            
+            # Pindahkan kursor ke bawah gambar untuk menulis keterangan
+            pdf.set_xy(current_x, start_y + img_h + 2)
             pdf.set_font("Arial", 'I', 8)
             pdf.multi_cell(item['width'], 4, f"Ket: {item['caption']}", align='L')
             
-            # Hitung tinggi ruang yang terpakai (gambar + teks)
-            current_item_height = img_height + 12
-            if current_item_height > max_row_height:
-                max_row_height = current_item_height
-            
-            # Geser posisi X untuk gambar selanjutnya (beri jarak 5mm)
+            # Update posisi X dan tinggi baris
             current_x += item['width'] + 5
-            
-        # Setelah semua gambar selesai, letakkan kursor Y di bawah gambar tertinggi
-        pdf.set_y(start_y + max_row_height + 5)    
+            item_total_h = img_h + 12
+            if item_total_h > max_row_height:
+                max_row_height = item_total_h
+        
+        # Reset posisi Y akhir agar tidak menimpa tanda tangan
+        pdf.set_y(start_y + max_row_height + 5)
+
+    pdf.ln(10)
+    
     # Tanda Tangan
     if pdf.get_y() > 240: pdf.add_page()
     pdf.cell(95, 10, "Technician,", align='C')
@@ -140,36 +136,32 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, logo_w=30, extra_items=N
 st.set_page_config(page_title="Service Report System", layout="centered")
 st.title("Digital Service Report")
 
-# Sidebar Pengaturan
+# Sidebar
 st.sidebar.header("Kop & Dokumentasi")
 uploaded_logo = st.sidebar.file_uploader("Logo Kop Surat", type=["png", "jpg", "jpeg"])
 logo_w = st.sidebar.slider("Lebar Logo (mm)", 10, 100, 30)
-
 st.sidebar.divider()
 st.sidebar.subheader("Foto Dokumentasi")
 img1 = st.sidebar.file_uploader("Foto 1", type=["png", "jpg", "jpeg"], key="f1")
 cap1 = st.sidebar.text_input("Keterangan Foto 1", key="c1")
 w1 = st.sidebar.slider("Lebar Foto 1 (mm)", 20, 180, 80, key="w1")
-
 img2 = st.sidebar.file_uploader("Foto 2", type=["png", "jpg", "jpeg"], key="f2")
 cap2 = st.sidebar.text_input("Keterangan Foto 2", key="c2")
 w2 = st.sidebar.slider("Lebar Foto 2 (mm)", 20, 180, 80, key="w2")
 
-# Formulir Utama (Kolom Service Report No telah dihapus)
+# Form Input
 with st.form("main_form"):
     col1, col2 = st.columns(2)
     with col1:
         completed_by = st.text_input("Completed By (Teknisi)")
         customer = st.text_input("Customer", value="PT. Finpac Anugerah Indonesia")
-        machine = st.text_input("Machine (e.g. Kilian)")
+        machine = st.text_input("Machine")
     with col2:
         report_date = st.date_input("Date", value=date.today())
         meet_with = st.text_input("Meet With (PIC)")
-        sub_col1, sub_col2 = st.columns(2)
-        with sub_col1:
-            m_type = st.text_input("Type")
-        with sub_col2:
-            serial_no = st.text_input("Serial No")
+        sc1, sc2 = st.columns(2)
+        with sc1: m_type = st.text_input("Type")
+        with sc2: serial_no = st.text_input("Serial No")
 
     problem = st.text_area("Problem Description")
     follow_up = st.text_area("Report / Follow Up Action")
@@ -188,7 +180,7 @@ with st.form("main_form"):
 # 6. LOGIKA SUBMIT
 if submitted:
     if not completed_by or not customer:
-        st.error("Mohon lengkapi data Teknisi dan Customer!")
+        st.error("Data Teknisi dan Customer wajib diisi!")
     else:
         logo_img = Image.open(uploaded_logo) if uploaded_logo else None
         extra_items = [
@@ -211,7 +203,7 @@ if submitted:
             })
             st.success("Laporan Berhasil Disimpan!")
 
-# 7. DOWNLOAD PDF
+# 7. DOWNLOAD
 if 'last_data' in st.session_state:
     st.divider()
     try:
