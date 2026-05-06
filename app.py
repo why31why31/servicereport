@@ -18,7 +18,7 @@ class PDF(FPDF):
         self.logo_w = logo_w
 
     def header(self):
-        # Kop surat hanya muncul di halaman 1 sesuai permintaan
+        # Kop surat (Logo & Header) hanya muncul di halaman 1
         if self.page_no() == 1:
             if self.logo_img:
                 self.image(self.logo_img, x=10, y=8, w=self.logo_w)
@@ -41,10 +41,10 @@ def save_to_excel(new_data):
         df.to_excel(EXCEL_FILE, index=False)
         return True
     except PermissionError:
-        st.error(f"⚠️ Gagal menyimpan! Mohon tutup file '{EXCEL_FILE}' di Excel.")
+        st.error(f"⚠️ Tutup file '{EXCEL_FILE}' yang sedang terbuka di Excel!")
         return False
     except Exception as e:
-        st.error(f"Terjadi kesalahan: {e}")
+        st.error(f"Error Excel: {e}")
         return False
 
 # 4. FUNGSI PEMBUATAN PDF (LOGIKA POSISI PRESISI)
@@ -53,7 +53,7 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, logo_w=30, extra_items=N
     pdf.add_page()
     pdf.set_font("Arial", size=10)
     
-    # Tabel Informasi Utama (Urutan: Completed By, Customer, Machine, Date, Meet With, Type, Serial No)
+    # Tabel Informasi Utama (Urutan sesuai permintaan terakhir)
     pdf.cell(95, 10, f"Completed By: {data['Completed By']}", border=1)
     pdf.cell(95, 10, f"Customer: {data['Customer']}", border=1, ln=1)
     
@@ -66,21 +66,19 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, logo_w=30, extra_items=N
     
     pdf.ln(5)
     
-    # Deskripsi Masalah
+    # Deskripsi Masalah & Tindakan
     pdf.set_font("Arial", 'B', 10)
     pdf.cell(0, 10, "Problem Description:", ln=1)
     pdf.set_font("Arial", size=10)
     pdf.multi_cell(0, 10, data['Problem'], border=1)
     
     pdf.ln(5)
-    
-    # Follow Up Action
     pdf.set_font("Arial", 'B', 10)
     pdf.cell(0, 10, "Report / Follow Up Action:", ln=1)
     pdf.set_font("Arial", size=10)
     pdf.multi_cell(0, 10, data['Follow Up'], border=1)
     
-    # --- LOGIKA FINAL DOKUMENTASI GAMBAR (TIDAK AKAN TERTIMPA) ---
+    # --- LOGIKA DOKUMENTASI GAMBAR (ANTI TERTUMPA) ---
     if extra_items:
         pdf.ln(5)
         valid_items = [item for item in extra_items if item['file']]
@@ -88,52 +86,51 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, logo_w=30, extra_items=N
         x_start = 15
         current_x = x_start
         max_row_height = 0
-        start_y = pdf.get_y() # Kunci baris Y
+        start_y = pdf.get_y()
         
         for item in valid_items:
             img_w = item['width']
             img_h = img_w / 1.5 
             
-            # 1. Cek pindah baris secara horizontal
+            # Cek pindah baris horizontal
             if current_x + img_w > 195:
                 pdf.set_y(start_y + max_row_height + 10)
                 start_y = pdf.get_y()
                 current_x = x_start
                 max_row_height = 0
 
-            # 2. Cek pindah halaman secara vertikal
+            # Cek pindah halaman vertikal
             if start_y + img_h > 240:
                 pdf.add_page()
                 start_y = 20 
                 current_x = x_start
 
-            # 3. Masukkan Gambar
+            # Gambar diletakkan di koordinat absolut
             pdf.image(item['file'], x=current_x, y=start_y, w=img_w)
             
-            # 4. Hitung tinggi teks secara manual (multi_cell)
+            # Hitung tinggi teks secara manual agar tidak nimpa
             pdf.set_font("Arial", 'I', 8)
             text_width = img_w - 2
-            # Simulasi perhitungan tinggi teks
             lines = pdf.multi_cell(text_width, 4, f"Ket: {item['caption']}", split_only=True)
             text_height = len(lines) * 4
             
-            # 5. Letakkan keterangan (set_xy memaksa posisi di bawah gambarnya sendiri)
+            # Paksa teks di bawah gambar item ini
             pdf.set_xy(current_x, start_y + img_h + 2)
             pdf.multi_cell(img_w, 4, f"Ket: {item['caption']}", align='L')
             
-            # 6. Hitung tinggi elemen (gambar + teks)
+            # Pantau tinggi elemen tertinggi di baris ini
             current_total_h = img_h + text_height + 5
             if current_total_h > max_row_height:
                 max_row_height = current_total_h
             
-            # 7. Geser X & Reset Y untuk gambar di sebelahnya
+            # Geser X dan Reset kursor Y untuk item berikutnya
             current_x += img_w + 10
             pdf.set_y(start_y) 
         
-        # Selesai loop, dorong kursor Y ke bawah baris gambar tertinggi
+        # Pindahkan kursor ke bawah dokumentasi foto
         pdf.set_y(start_y + max_row_height + 10)
 
-    # --- BAGIAN TANDA TANGAN ---
+    # --- TANDA TANGAN ---
     if pdf.get_y() > 230:
         pdf.add_page()
 
@@ -170,7 +167,7 @@ img2 = st.sidebar.file_uploader("Foto 2", type=["png", "jpg", "jpeg"], key="f2")
 cap2 = st.sidebar.text_input("Keterangan Foto 2", key="c2")
 w2 = st.sidebar.slider("Lebar Foto 2 (mm)", 20, 180, 80, key="w2")
 
-# Form Input Data (Urutan Sesuai Permintaan: Completed By, Customer, Machine, Date, Meet With, Type, Serial No)
+# Form Input Data (Urutan: Completed By, Customer, Machine, Date, Meet With, Type, Serial No)
 with st.form("main_form"):
     col1, col2 = st.columns(2)
     with col1:
@@ -180,11 +177,9 @@ with st.form("main_form"):
     with col2:
         report_date = st.date_input("Date", value=date.today())
         meet_with = st.text_input("Meet With (PIC)")
-        sub_col1, sub_col2 = st.columns(2)
-        with sub_col1:
-            m_type = st.text_input("Type")
-        with sub_col2:
-            serial_no = st.text_input("Serial No")
+        sc1, sc2 = st.columns(2)
+        with sc1: m_type = st.text_input("Type")
+        with sc2: serial_no = st.text_input("Serial No")
 
     problem = st.text_area("Problem Description")
     follow_up = st.text_area("Report / Follow Up Action")
@@ -198,13 +193,14 @@ with st.form("main_form"):
         st.write("Tanda Tangan Customer:")
         c_cust = st_canvas(stroke_width=2, stroke_color="#000", background_color="rgba(0,0,0,0)", height=150, width=300, key="c_c")
 
-    submitted = st.form_submit_button("Simpan & Proses PDF")
+    submitted = st.form_submit_button("Simpan Data")
 
-# 6. LOGIKA SUBMIT
+# 6. LOGIKA SUBMIT & DOWNLOAD
 if submitted:
     if not completed_by or not customer:
         st.error("Data Teknisi dan Customer wajib diisi!")
     else:
+        # Proses Gambar
         logo_img = Image.open(uploaded_logo) if uploaded_logo else None
         extra_items = [
             {'file': Image.open(img1) if img1 else None, 'caption': cap1, 'width': w1},
@@ -220,29 +216,30 @@ if submitted:
         }
         
         if save_to_excel(report_data):
-            st.session_state.update({
-                'last_data': report_data, 'sig_t': img_t, 'sig_c': img_c,
-                'logo': logo_img, 'logo_w': logo_w, 'extra_items': extra_items
-            })
+            st.session_state['last_data'] = report_data
+            st.session_state['sig_t'] = img_t
+            st.session_state['sig_c'] = img_c
+            st.session_state['logo'] = logo_img
+            st.session_state['logo_w'] = logo_w
+            st.session_state['extra_items'] = extra_items
             st.success("Laporan Berhasil Disimpan!")
 
-# 7. DOWNLOAD
-if 'last_data' in st.session_state:
+# Tombol download muncul setelah simpan berhasil
+if st.session_state.get('last_data'):
     st.divider()
-    try:
-        pdf_file = create_pdf(
-            st.session_state['last_data'], 
-            st.session_state['sig_t'], 
-            st.session_state['sig_c'],
-            logo=st.session_state.get('logo'),
-            logo_w=st.session_state.get('logo_w', 30),
-            extra_items=st.session_state.get('extra_items')
-        )
-        st.download_button(
-            label="⬇️ Download PDF Service Report",
-            data=pdf_file,
-            file_name=f"Report_{st.session_state['last_data']['Serial No']}.pdf",
-            mime="application/pdf"
-        )
-    except Exception as e:
-        st.error(f"Gagal memproses PDF: {e}")
+    pdf_bytes = create_pdf(
+        st.session_state['last_data'], 
+        st.session_state['sig_t'], 
+        st.session_state['sig_c'],
+        logo=st.session_state.get('logo'),
+        logo_w=st.session_state.get('logo_w', 30),
+        extra_items=st.session_state.get('extra_items')
+    )
+    
+    st.download_button(
+        label="⬇️ Download PDF Service Report",
+        data=pdf_bytes,
+        file_name=f"Report_{st.session_state['last_data']['Serial No']}.pdf",
+        mime="application/pdf",
+        key="dl_btn"
+    )
