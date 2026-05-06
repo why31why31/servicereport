@@ -74,18 +74,6 @@ def create_pdf(data, sig_tech=None, sig_cust=None):
     if isinstance(output, str):
         return output.encode('latin-1')
     return bytes(output)
-def save_to_excel(new_data):
-    try:
-        if os.path.exists(EXCEL_FILE):
-            df = pd.read_excel(EXCEL_FILE)
-            df = pd.concat([df, pd.DataFrame([new_data])], ignore_index=True)
-        else:
-            df = pd.DataFrame([new_data])
-        df.to_excel(EXCEL_FILE, index=False)
-        return True
-    except PermissionError:
-        st.error(f"⚠️ Tutup file '{EXCEL_FILE}' di Excel!")
-        return False
 
 # --- UI Streamlit ---
 st.set_page_config(page_title="Service Report Digital Sign", layout="centered")
