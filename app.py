@@ -59,26 +59,86 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, logo_w=30, extra_items=N
     pdf.cell(95, 10, f"Machine: {data['Machine']}", border=1)
     pdf.cell(95, 10, f"Date: {data['Date']}", border=1, ln=1)
     pdf.cell(95, 10, f"Meet With: {data['Meet With']}", border=1)
-    
-    # Type dan Serial No
     pdf.cell(47.5, 10, f"Type: {data['Type']}", border=1)
     pdf.cell(47.5, 10, f"Serial No: {data['Serial No']}", border=1, ln=1)
     
     pdf.ln(5)
     
-    # Deskripsi Masalah
+    # Deskripsi Masalah & Tindakan
     pdf.set_font("Arial", 'B', 10)
     pdf.cell(0, 10, "Problem Description:", ln=1)
     pdf.set_font("Arial", size=10)
     pdf.multi_cell(0, 10, data['Problem'], border=1)
-    
     pdf.ln(5)
-    
-    # Tindakan / Follow Up
     pdf.set_font("Arial", 'B', 10)
     pdf.cell(0, 10, "Report / Follow Up Action:", ln=1)
     pdf.set_font("Arial", size=10)
     pdf.multi_cell(0, 10, data['Follow Up'], border=1)
+    
+    # --- LOGIKA FINAL: MENGHINDARI TUMPANG TINDIH ---
+    if extra_items:
+        pdf.ln(5)
+        valid_items = [item for item in extra_items if item['file']]
+        
+        x_start = 15
+        current_x = x_start
+        max_row_height = 0
+        start_y = pdf.get_y() # Titik acuan baris gambar
+        
+        for item in valid_items:
+            img_w = item['width']
+            img_h = img_w / 1.5 
+            
+            # Cek jika harus pindah baris secara horizontal
+            if current_x + img_w > 195:
+                start_y += max_row_height + 10 
+                current_x = x_start
+                max_row_height = 0
+
+            # Cek sisa ruang halaman vertikal
+            if start_y + img_h > 240:
+                pdf.add_page()
+                start_y = 20 # Mulai dari atas di halaman baru
+                current_x = x_start
+
+            # 1. Letakkan Gambar
+            pdf.image(item['file'], x=current_x, y=start_y, w=img_w)
+            
+            # 2. Letakkan Keterangan (Gunakan set_xy untuk posisi absolut)
+            pdf.set_xy(current_x, start_y + img_h + 2)
+            pdf.set_font("Arial", 'I', 8)
+            pdf.multi_cell(img_w, 4, f"Ket: {item['caption']}", border=0, align='L')
+            
+            # 3. Hitung posisi bawah dari elemen ini
+            current_bottom = pdf.get_y()
+            current_total_h = current_bottom - start_y
+            
+            if current_total_h > max_row_height:
+                max_row_height = current_total_h
+            
+            # 4. Geser X untuk gambar berikutnya
+            current_x += img_w + 10
+        
+        # PENTING: Paksa kursor Y ke posisi paling bawah baris gambar agar tanda tangan tidak nimpa
+        pdf.set_y(start_y + max_row_height + 10)
+
+    # Tanda Tangan
+    if pdf.get_y() > 240: 
+        pdf.add_page()
+    
+    pdf.ln(5)
+    pdf.cell(95, 10, "Technician,", align='C')
+    pdf.cell(95, 10, "Customer,", ln=1, align='C')
+    
+    sig_y = pdf.get_y()
+    if sig_t: pdf.image(sig_t, x=42, y=sig_y, w=30)
+    if sig_c: pdf.image(sig_c, x=138, y=sig_y, w=30)
+    
+    pdf.ln(25)
+    pdf.cell(95, 10, f"( {data['Completed By']} )", align='C')
+    pdf.cell(95, 10, f"( {data['Meet With']} )", ln=1, align='C')
+
+    return bytes(pdf.output())
     
 # --- LOGIKA FINAL: GAMBAR BERDAMPINGAN & KETERANGAN DINAMIS ---
     if extra_items:
