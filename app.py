@@ -8,7 +8,7 @@ from PIL import Image
 import io
 import base64
 
-# --- 1. PEMBERSIHAN TEKS & OPTIMASI ---
+# --- 1. FUNGSI PEMBERSIHAN TEKS (MENCEGAH ERROR UNICODE) ---
 def clean_text(text):
     if not text: return ""
     replacements = {
@@ -19,6 +19,7 @@ def clean_text(text):
         text = text.replace(search, replace)
     return text.encode('latin-1', 'ignore').decode('latin-1')
 
+# --- 2. FUNGSI OPTIMASI GAMBAR (AGAR PDF TIDAK BERAT) ---
 def optimize_image(uploaded_file, max_res=(600, 600)):
     if uploaded_file is None: return None
     img = Image.open(uploaded_file)
@@ -26,7 +27,7 @@ def optimize_image(uploaded_file, max_res=(600, 600)):
     img.thumbnail(max_res, Image.Resampling.LANCZOS)
     return img
 
-# --- 2. CLASS PDF (Kop Surat Muncul di Semua Halaman) ---
+# --- 3. CLASS PDF DENGAN KOP SURAT FIX ---
 class PDF(FPDF):
     def __init__(self, logo_img=None):
         super().__init__()
@@ -43,7 +44,7 @@ class PDF(FPDF):
             self.image(self.logo_img, x=x_centered, y=8, h=logo_h)
             self.ln(logo_h + 5)
 
-        # Banner hanya di halaman pertama (opsional, jika ingin di semua halaman hapus if)
+        # Judul Laporan hanya di halaman pertama
         if self.page_no() == 1:
             self.set_fill_color(41, 128, 185) 
             self.set_text_color(255, 255, 255)
@@ -52,58 +53,57 @@ class PDF(FPDF):
             self.set_text_color(0, 0, 0)
             self.ln(3)
 
-# --- 3. FUNGSI UTAMA PDF ---
+# --- 4. FUNGSI UTAMA PEMBUATAN PDF ---
 def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
     pdf = PDF(logo_img=logo)
     pdf.add_page()
     
-    # --- DATA TEKNIS ---
+    # --- INFO BOX ---
     pdf.set_font("helvetica", 'B', 8)
     pdf.set_fill_color(240, 240, 240)
     h_row = 7
     
-    fields = [
-        clean_text(data.get('Completed By', '')), clean_text(data.get('Customer', '')),
-        clean_text(data.get('Meet With', '')), clean_text(data.get('Date', '')),
-        clean_text(data.get('Machine', '')), clean_text(data.get('Type', '')),
-        clean_text(data.get('Serial No', ''))
-    ]
+    # Ambil data dan bersihkan teks
+    d = {k: clean_text(str(v)) for k, v in data.items()}
 
+    # Grid Baris 1
     pdf.cell(30, h_row, " Technician", border=1, fill=True)
-    pdf.set_font("helvetica", '', 8); pdf.cell(65, h_row, f" {fields[0]}", border=1)
+    pdf.set_font("helvetica", '', 8); pdf.cell(65, h_row, f" {d.get('Completed By')}", border=1)
     pdf.set_font("helvetica", 'B', 8); pdf.cell(30, h_row, " Customer", border=1, fill=True)
-    pdf.set_font("helvetica", '', 8); pdf.cell(65, h_row, f" {fields[1]}", border=1, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    pdf.set_font("helvetica", '', 8); pdf.cell(65, h_row, f" {d.get('Customer')}", border=1, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     
+    # Grid Baris 2
     pdf.set_font("helvetica", 'B', 8); pdf.cell(30, h_row, " Meet With", border=1, fill=True)
-    pdf.set_font("helvetica", '', 8); pdf.cell(65, h_row, f" {fields[2]}", border=1)
+    pdf.set_font("helvetica", '', 8); pdf.cell(65, h_row, f" {d.get('Meet With')}", border=1)
     pdf.set_font("helvetica", 'B', 8); pdf.cell(30, h_row, " Date", border=1, fill=True)
-    pdf.set_font("helvetica", '', 8); pdf.cell(65, h_row, f" {fields[3]}", border=1, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    pdf.set_font("helvetica", '', 8); pdf.cell(65, h_row, f" {d.get('Date')}", border=1, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     
+    # Grid Baris 3
     pdf.set_font("helvetica", 'B', 8); pdf.cell(30, h_row, " Machine", border=1, fill=True)
-    pdf.set_font("helvetica", '', 8); pdf.cell(65, h_row, f" {fields[4]}", border=1)
+    pdf.set_font("helvetica", '', 8); pdf.cell(65, h_row, f" {d.get('Machine')}", border=1)
     pdf.set_font("helvetica", 'B', 8); pdf.cell(15, h_row, " Type", border=1, fill=True)
-    pdf.set_font("helvetica", '', 8); pdf.cell(30, h_row, f" {fields[5]}", border=1)
+    pdf.set_font("helvetica", '', 8); pdf.cell(30, h_row, f" {d.get('Type')}", border=1)
     pdf.set_font("helvetica", 'B', 8); pdf.cell(20, h_row, " Ser No", border=1, fill=True)
-    pdf.set_font("helvetica", '', 8); pdf.cell(30, h_row, f" {fields[6]}", border=1, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    pdf.set_font("helvetica", '', 8); pdf.cell(30, h_row, f" {d.get('Serial No')}", border=1, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     
     pdf.ln(5)
     
-    # --- ISI LAPORAN ---
+    # --- CONTENT ---
     pdf.set_draw_color(41, 128, 185)
     pdf.set_font("helvetica", 'B', 10)
     pdf.cell(0, 7, "PROBLEM DESCRIPTION", border='B', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.ln(1)
     pdf.set_font("helvetica", '', 9)
-    pdf.multi_cell(0, 5, clean_text(data.get('Problem', '')), border=0)
+    pdf.multi_cell(0, 5, d.get('Problem'), border=0)
     pdf.ln(3)
     
     pdf.set_font("helvetica", 'B', 10)
     pdf.cell(0, 7, "REPORT / FOLLOW UP ACTION", border='B', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.ln(1)
     pdf.set_font("helvetica", '', 9)
-    pdf.multi_cell(0, 5, clean_text(data.get('Follow Up', '')), border=0)
+    pdf.multi_cell(0, 5, d.get('Follow Up'), border=0)
 
-    # --- LAMPIRAN FOTO ---
+    # --- FOTO LAMPIRAN (GRID 2x2) ---
     if extra_items:
         pdf.add_page()
         pdf.set_font("helvetica", 'B', 12)
@@ -122,7 +122,7 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
             pdf.cell(cw, 5, f"Photo {i+1}: {clean_text(item['caption'][:50])}", align='C')
         pdf.ln(20)
 
-    # --- TANDA TANGAN ---
+    # --- TANDA TANGAN (HALAMAN TERAKHIR) ---
     if pdf.get_y() > 230: pdf.add_page()
     pdf.ln(10)
     pdf.set_font("helvetica", 'B', 9)
@@ -135,74 +135,84 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
     
     pdf.ln(20)
     pdf.set_font("helvetica", 'BU', 9)
-    pdf.cell(95, 7, f"{fields[0]}", align='C')
-    pdf.cell(95, 7, f"{fields[2]}", align='C')
+    pdf.cell(95, 7, f"{d.get('Completed By')}", align='C')
+    pdf.cell(95, 7, f"{d.get('Meet With')}", align='C')
 
     return bytes(pdf.output())
 
-# --- 4. UI STREAMLIT ---
-st.set_page_config(page_title="Service Report System", layout="centered")
+# --- 5. UI STREAMLIT ---
+st.set_page_config(page_title="Finpac Service Report", layout="centered")
 
-st.sidebar.title("Pengaturan Kop")
-uploaded_logo = st.sidebar.file_uploader("Upload Logo Baru (Ganti Kop)", type=["png", "jpg", "jpeg"])
-uploaded_photos = st.sidebar.file_uploader("Tambah Foto Dokumentasi", type=["png", "jpg", "jpeg"], accept_multiple_files=True)
+if st.sidebar.button("🔄 Reset Aplikasi"):
+    st.session_state.clear()
+    st.rerun()
 
-photo_data = []
+st.title("Digital Service Report")
+
+st.sidebar.header("Media & Settings")
+uploaded_logo = st.sidebar.file_uploader("Upload Logo Baru (Kop)", type=["png", "jpg", "jpeg"])
+uploaded_photos = st.sidebar.file_uploader("Pilih Foto Dokumentasi", type=["png", "jpg", "jpeg"], accept_multiple_files=True)
+
+# Input Keterangan Foto
+photo_captions = []
 if uploaded_photos:
+    st.sidebar.subheader("Keterangan Lampiran")
     for i, p in enumerate(uploaded_photos):
-        cap = st.sidebar.text_input(f"Keterangan Foto {i+1}", key=f"cap_{i}")
-        photo_data.append({'file': p, 'caption': cap})
+        cap = st.sidebar.text_input(f"Ket Foto {i+1}", key=f"cap_{i}")
+        photo_captions.append(cap)
 
 with st.form("main_form"):
-    st.subheader("Data Laporan")
     c1, c2 = st.columns(2)
     with c1:
         comp_by = st.text_input("Completed By")
         cust = st.text_input("Customer", value="PT. Finpac Anugerah Indonesia")
         meet = st.text_input("Meet With")
     with c2:
-        dt = st.date_input("Date", value=date.today())
+        rep_date = st.date_input("Date", value=date.today())
         mach = st.text_input("Machine")
-        stype = st.text_input("Type")
-        ser = st.text_input("Serial No")
+        m_type = st.text_input("Type")
+        s_no = st.text_input("Serial No")
 
     prob = st.text_area("Problem Description")
-    fup = st.text_area("Report / Follow Up Action")
+    f_up = st.text_area("Report / Follow Up Action")
     
-    st.write("---")
+    st.divider()
     cs1, cs2 = st.columns(2)
     with cs1:
-        st.write("Tanda Tangan Teknisi:")
+        st.write("Teknisi:")
         c_tech = st_canvas(stroke_width=2, stroke_color="#000", background_color="rgba(0,0,0,0)", height=100, width=200, key="c_t")
     with cs2:
-        st.write("Tanda Tangan Customer:")
+        st.write("Customer:")
         c_cust = st_canvas(stroke_width=2, stroke_color="#000", background_color="rgba(0,0,0,0)", height=100, width=200, key="c_c")
 
-    sub = st.form_submit_button("Simpan & Preview")
+    submitted = st.form_submit_button("Simpan & Preview Report")
 
-if sub:
-    if not comp_by: st.error("Nama Teknisi harus diisi!")
+if submitted:
+    if not comp_by: st.error("Isi Nama Teknisi!")
     else:
-        # Generate Data
+        # Proses Foto
+        final_photos = []
+        if uploaded_photos:
+            for idx, p_file in enumerate(uploaded_photos):
+                opt_img = optimize_image(p_file)
+                final_photos.append({'img': opt_img, 'caption': photo_captions[idx] if idx < len(photo_captions) else ""})
+        
         logo_img = Image.open(uploaded_logo) if uploaded_logo else None
-        final_photos = [{'img': optimize_image(i['file']), 'caption': i['caption']} for i in photo_data]
         sig_t = Image.fromarray(c_tech.image_data.astype('uint8'), 'RGBA') if c_tech.image_data is not None else None
         sig_c = Image.fromarray(c_cust.image_data.astype('uint8'), 'RGBA') if c_cust.image_data is not None else None
         
         rep_data = {
             "Completed By": comp_by, "Customer": cust, "Meet With": meet,
-            "Date": str(dt), "Machine": mach, "Type": stype, "Serial No": ser,
-            "Problem": prob, "Follow Up": fup
+            "Date": str(rep_date), "Machine": mach, "Type": m_type,
+            "Serial No": s_no, "Problem": prob, "Follow Up": f_up
         }
+        
         st.session_state.update({'d': rep_data, 'st': sig_t, 'sc': sig_c, 'l': logo_img, 'p': final_photos})
-        st.success("Laporan diproses!")
+        st.success("Laporan Berhasil Diproses!")
 
 if 'd' in st.session_state:
+    st.write("---")
     pdf_bytes = create_pdf(st.session_state['d'], st.session_state['st'], st.session_state['sc'], logo=st.session_state.get('l'), extra_items=st.session_state.get('p'))
-    
-    st.download_button("⬇️ Download PDF", data=pdf_bytes, file_name=f"Report_{st.session_state['d']['Serial No']}.pdf")
-    
-    # Preview Full Halaman
+    st.download_button("⬇️ Download PDF Report", data=pdf_bytes, file_name=f"Report_{st.session_state['d']['Serial No']}.pdf")
     base64_pdf = base64.b64encode(pdf_bytes).decode('utf-8')
-    pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="1000" type="application/pdf"></iframe>'
-    st.markdown(pdf_display, unsafe_allow_html=True)
+    st.markdown(f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="1000" type="application/pdf"></iframe>', unsafe_allow_html=True)
