@@ -18,12 +18,17 @@ class PDF(FPDF):
 
     def header(self):
         if self.page_no() == 1:
-            if self.logo_img:
-                self.image(self.logo_img, x=10, y=8, w=30)
+            # Banner Biru Estetik
             self.set_fill_color(41, 128, 185) 
             self.set_text_color(255, 255, 255)
             self.set_font('helvetica', 'B', 16)
             self.cell(0, 15, "  SERVICE REPORT  ", fill=True, align='R', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+            
+            # Logo diletakkan setelah banner agar tidak tertutup (posisi mengambang)
+            if self.logo_img:
+                # x=12, y=10 posisi di depan banner biru
+                self.image(self.logo_img, x=12, y=10, h=10)
+            
             self.set_text_color(0, 0, 0)
             self.ln(5)
 
@@ -47,8 +52,8 @@ def save_to_excel(new_data):
         st.error(f"Error Excel: {e}")
         return False
 
-# --- FUNGSI BUAT PDF (PERBAIKAN PARAMETER BORDER) ---
-def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None, img_width_adj=100):
+# --- FUNGSI BUAT PDF (GRID 2x2 UNTUK FOTO) ---
+def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
     pdf = PDF(logo_img=logo)
     pdf.add_page()
     
@@ -56,28 +61,45 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None, img_wi
     pdf.set_font("helvetica", 'B', 9)
     pdf.set_fill_color(240, 240, 240)
     
-    fields = [
-        ("Technician", data['Completed By'], "Customer", data['Customer']),
-        ("Machine", data['Machine'], "Date", data['Date']),
-        ("Meet With", data['Meet With'], "Serial No", data['Serial No'])
-    ]
+    # Baris 1: Technician & Customer
+    pdf.cell(35, 8, " Technician", border=1, fill=True)
+    pdf.set_font("helvetica", '', 9)
+    pdf.cell(60, 8, f" {data['Completed By']}", border=1)
+    pdf.set_font("helvetica", 'B', 9)
+    pdf.cell(35, 8, " Customer", border=1, fill=True)
+    pdf.set_font("helvetica", '', 9)
+    pdf.cell(60, 8, f" {data['Customer']}", border=1, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     
-    for label1, val1, label2, val2 in fields:
-        pdf.set_font("helvetica", 'B', 9)
-        pdf.cell(35, 8, f" {label1}", border=1, fill=True)
-        pdf.set_font("helvetica", '', 9)
-        pdf.cell(60, 8, f" {val1}", border=1)
-        pdf.set_font("helvetica", 'B', 9)
-        pdf.cell(35, 8, f" {label2}", border=1, fill=True)
-        pdf.set_font("helvetica", '', 9)
-        pdf.cell(60, 8, f" {val2}", border=1, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    # Baris 2: Machine & Date
+    pdf.set_font("helvetica", 'B', 9)
+    pdf.cell(35, 8, " Machine", border=1, fill=True)
+    pdf.set_font("helvetica", '', 9)
+    pdf.cell(60, 8, f" {data['Machine']}", border=1)
+    pdf.set_font("helvetica", 'B', 9)
+    pdf.cell(35, 8, " Date", border=1, fill=True)
+    pdf.set_font("helvetica", '', 9)
+    pdf.cell(60, 8, f" {data['Date']}", border=1, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    
+    # Baris 3: Meet With, Type & Serial No
+    pdf.set_font("helvetica", 'B', 9)
+    pdf.cell(35, 8, " Meet With", border=1, fill=True)
+    pdf.set_font("helvetica", '', 9)
+    pdf.cell(60, 8, f" {data['Meet With']}", border=1)
+    
+    # Grid kecil untuk Type dan Serial No
+    pdf.set_font("helvetica", 'B', 9)
+    pdf.cell(15, 8, " Type", border=1, fill=True)
+    pdf.set_font("helvetica", '', 9)
+    pdf.cell(25, 8, f" {data['Type']}", border=1)
+    pdf.set_font("helvetica", 'B', 9)
+    pdf.cell(20, 8, " Ser No", border=1, fill=True)
+    pdf.set_font("helvetica", '', 9)
+    pdf.cell(35, 8, f" {data['Serial No']}", border=1, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     
     pdf.ln(8)
     
-    # --- ISI LAPORAN (BORDER FIXED) ---
+    # --- ISI LAPORAN ---
     pdf.set_draw_color(41, 128, 185)
-    
-    # Problem Description
     pdf.set_font("helvetica", 'B', 10)
     pdf.cell(0, 8, "PROBLEM DESCRIPTION", border='B', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.ln(2)
@@ -85,36 +107,51 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None, img_wi
     pdf.multi_cell(0, 6, data['Problem'], border=0)
     pdf.ln(5)
     
-    # Follow Up Action
     pdf.set_font("helvetica", 'B', 10)
     pdf.cell(0, 8, "REPORT / FOLLOW UP ACTION", border='B', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.ln(2)
     pdf.set_font("helvetica", '', 10)
     pdf.multi_cell(0, 6, data['Follow Up'], border=0)
 
-    # --- LAMPIRAN FOTO ---
+    # --- LAMPIRAN FOTO (GRID 2x2) ---
     if extra_items:
         pdf.add_page()
         pdf.set_font("helvetica", 'B', 12)
         pdf.cell(0, 10, "DOCUMENTATION PHOTOS", align='C', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         pdf.ln(5)
         
+        # Pengaturan Grid
+        col_width = 90
+        row_height = 70
+        margin = 10
+        
         for i, item in enumerate(extra_items):
-            w_orig, h_orig = item['img'].size
-            img_w = img_width_adj 
-            img_h = (h_orig / w_orig) * img_w
+            # Tentukan posisi X dan Y berdasarkan indeks (0, 1, 2, 3)
+            col = i % 2
+            row = (i // 2) % 2
             
-            if pdf.get_y() + img_h > 240: pdf.add_page()
+            # Jika sudah gambar ke-5, buat halaman baru
+            if i > 0 and i % 4 == 0:
+                pdf.add_page()
+                pdf.set_font("helvetica", 'B', 12)
+                pdf.cell(0, 10, "DOCUMENTATION PHOTOS (Cont.)", align='C', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+                pdf.ln(5)
             
-            x_pos = (210 - img_w) / 2
+            x_pos = margin + (col * (col_width + 10))
+            # Hitung Y berdasarkan row saat ini di halaman
+            y_start = 30 + (row * (row_height + 25))
+            
+            # Frame Foto
             pdf.set_draw_color(200, 200, 200)
-            pdf.rect(x_pos - 1, pdf.get_y() - 1, img_w + 2, img_h + 8) # Frame
+            pdf.rect(x_pos, y_start, col_width, row_height)
             
-            pdf.image(item['img'], x=x_pos, y=pdf.get_y(), w=img_w)
-            pdf.set_y(pdf.get_y() + img_h + 1)
-            pdf.set_font("helvetica", 'I', 8)
-            pdf.cell(0, 6, f"Photo {i+1}: {item['caption']}", align='C', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-            pdf.ln(8)
+            # Gambar (Fit to Box)
+            pdf.image(item['img'], x=x_pos+2, y=y_start+2, w=col_width-4, h=row_height-10)
+            
+            # Keterangan di bawah foto
+            pdf.set_xy(x_pos, y_start + row_height - 6)
+            pdf.set_font("helvetica", 'I', 7)
+            pdf.cell(col_width, 5, f"Photo {i+1}: {item['caption'][:50]}", align='C')
 
     # --- TANDA TANGAN ---
     pdf.set_y(-60)
@@ -148,15 +185,13 @@ if uploaded_photos:
         cap = st.sidebar.text_input(f"Ket Foto {i+1}", key=f"cap_{i}")
         photo_data.append({'file': p, 'caption': cap})
 
-img_adj = st.sidebar.slider("Lebar Foto di PDF (mm)", 30, 180, 100)
-
 with st.form("main_form"):
-    col1, col2 = st.columns(2)
-    with col1:
+    c1, c2 = st.columns(2)
+    with c1:
         completed_by = st.text_input("Completed By")
         customer = st.text_input("Customer", value="PT. Finpac Anugerah Indonesia")
         machine = st.text_input("Machine")
-    with col2:
+    with c2:
         report_date = st.date_input("Date", value=date.today())
         meet_with = st.text_input("Meet With")
         sc1, sc2 = st.columns(2)
@@ -178,7 +213,7 @@ with st.form("main_form"):
     submitted = st.form_submit_button("Simpan & Lihat Preview")
 
 if submitted:
-    if not completed_by: st.error("Isi Nama Teknisi!")
+    if not completed_by: st.error("Lengkapi data!")
     else:
         final_list = [{'img': optimize_image(i['file']), 'caption': i['caption']} for i in photo_data]
         logo_img = optimize_image(uploaded_logo, (300, 300))
@@ -192,13 +227,13 @@ if submitted:
         }
         
         if save_to_excel(report_data):
-            st.session_state.update({'last_data': report_data, 'sig_t': sig_t_img, 'sig_c': sig_c_img, 'logo': logo_img, 'extra_items': final_list, 'img_adj': img_adj})
-            st.success("Tersimpan!")
+            st.session_state.update({'last_data': report_data, 'sig_t': sig_t_img, 'sig_c': sig_c_img, 'logo': logo_img, 'extra_items': final_list})
+            st.success("Data Tersimpan!")
 
 if 'last_data' in st.session_state:
     st.write("---")
     st.subheader("🔍 PDF Preview")
-    pdf_bytes = create_pdf(st.session_state['last_data'], st.session_state['sig_t'], st.session_state['sig_c'], logo=st.session_state.get('logo'), extra_items=st.session_state.get('extra_items'), img_width_adj=st.session_state.get('img_adj', 100))
+    pdf_bytes = create_pdf(st.session_state['last_data'], st.session_state['sig_t'], st.session_state['sig_c'], logo=st.session_state.get('logo'), extra_items=st.session_state.get('extra_items'))
     base64_pdf = base64.b64encode(pdf_bytes).decode('utf-8')
     st.markdown(f'<embed src="data:application/pdf;base64,{base64_pdf}" width="100%" height="800" type="application/pdf">', unsafe_allow_html=True)
     st.download_button("⬇️ Download PDF", data=pdf_bytes, file_name=f"Report_{st.session_state['last_data']['Serial No']}.pdf")
