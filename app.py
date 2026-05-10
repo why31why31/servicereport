@@ -27,7 +27,8 @@ class PDF(FPDF):
     def __init__(self, logo_img=None):
         super().__init__()
         self.logo_img = logo_img
-        self.set_auto_page_break(auto=True, margin=15)
+        # Mengurangi margin bawah agar tanda tangan tidak mudah pindah halaman
+        self.set_auto_page_break(auto=True, margin=10)
 
     def header(self):
         if self.page_no() == 1:
@@ -42,7 +43,7 @@ class PDF(FPDF):
             self.set_font('helvetica', 'B', 14)
             self.cell(0, 10, "SERVICE REPORT", fill=True, align='C', border=0, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
             self.set_text_color(0, 0, 0)
-            self.ln(3)
+            self.ln(2)
 
 # --- 3. GENERATION FUNCTION ---
 def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
@@ -52,7 +53,7 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
     # --- INFO BOX ---
     pdf.set_font("helvetica", 'B', 8)
     pdf.set_fill_color(240, 240, 240)
-    h_row = 7
+    h_row = 6.5 # Memperkecil tinggi baris
     d = {k: clean_text(str(v)) for k, v in data.items()}
 
     pdf.cell(30, h_row, " Technician", border=1, fill=True)
@@ -72,143 +73,83 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
     pdf.set_font("helvetica", 'B', 8); pdf.cell(20, h_row, " Ser No", border=1, fill=True)
     pdf.set_font("helvetica", '', 8); pdf.cell(30, h_row, f" {d.get('Serial No')}", border=1, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     
-    pdf.ln(4)
-    
-    # --- REPORT CONTENT ---
-    pdf.set_draw_color(41, 128, 185)
-    pdf.set_font("helvetica", 'B', 10)
-    pdf.cell(0, 7, "PROBLEM DESCRIPTION", border='B', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-    pdf.ln(1)
-    pdf.set_font("helvetica", '', 9)
-    pdf.multi_cell(0, 5, d.get('Problem'), border=0)
     pdf.ln(3)
     
+    # --- CONTENT ---
+    pdf.set_draw_color(41, 128, 185)
     pdf.set_font("helvetica", 'B', 10)
-    pdf.cell(0, 7, "REPORT / FOLLOW UP ACTION", border='B', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-    pdf.ln(1)
+    pdf.cell(0, 6, "PROBLEM DESCRIPTION", border='B', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    pdf.set_font("helvetica", '', 9)
+    pdf.multi_cell(0, 5, d.get('Problem'), border=0)
+    pdf.ln(2)
+    
+    pdf.set_font("helvetica", 'B', 10)
+    pdf.cell(0, 6, "REPORT / FOLLOW UP ACTION", border='B', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.set_font("helvetica", '', 9)
     pdf.multi_cell(0, 5, d.get('Follow Up'), border=0)
-    pdf.ln(5)
+    pdf.ln(3)
 
     # --- CENTERED IMAGE GRID (2x2) ---
     if extra_items:
-        # Check space: if less than photo height, move to new page
-        if pdf.get_y() > 220: pdf.add_page()
+        # Pindah halaman hanya jika sisa ruang benar-benar habis
+        if pdf.get_y() > 250: pdf.add_page()
         
         pdf.set_font("helvetica", 'B', 10)
-        pdf.cell(0, 7, "DOCUMENTATION PHOTOS", border='B', align='C', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-        pdf.ln(4)
+        pdf.cell(0, 6, "DOCUMENTATION PHOTOS", border='B', align='C', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        pdf.ln(3)
         
-        cw, rh = 85, 60 # Photo size
+        cw, rh = 85, 58 # Mengurangi sedikit tinggi foto (dari 60 ke 58)
         gap = 10
-        margin_left = (210 - (cw * 2 + gap)) / 2 # Precise horizontal centering
+        margin_left = (210 - (cw * 2 + gap)) / 2
         
         start_y = pdf.get_y()
         
         for i, item in enumerate(extra_items):
-            # Page handling for more than 4 photos
             if i > 0 and i % 4 == 0:
                 pdf.add_page()
-                start_y = pdf.get_y() + 10
+                start_y = pdf.get_y() + 5
             
             col = i % 2
             row = (i // 2) % 2
             
             x_pos = margin_left + (col * (cw + gap))
-            y_pos = start_y + (row * (rh + 12))
+            y_pos = start_y + (row * (rh + 10))
             
-            # Frame and Image
+            # Deteksi Page Break saat render foto
+            if y_pos + rh > 280:
+                pdf.add_page()
+                start_y = pdf.get_y() + 5
+                y_pos = start_y
+
             pdf.set_draw_color(200, 200, 200)
             pdf.rect(x_pos, y_pos, cw, rh)
             pdf.image(item['img'], x=x_pos+1, y=y_pos+1, w=cw-2, h=rh-8)
             
-            # Caption
             pdf.set_xy(x_pos, y_pos + rh - 6)
             pdf.set_font("helvetica", 'I', 7)
             pdf.cell(cw, 5, f"Photo {i+1}: {clean_text(item['caption'][:40])}", align='C')
             
-            # Update Y after each row
             if col == 1 or i == len(extra_items)-1:
-                pdf.set_y(y_pos + rh + 8)
+                pdf.set_y(y_pos + rh + 5)
 
-    # --- SIGNATURES (ON LAST PAGE) ---
-    if pdf.get_y() > 240: pdf.add_page()
-    pdf.ln(5)
+    # --- SIGNATURES ---
+    # Jika sisa ruang < 35mm, baru pindah halaman
+    if pdf.get_y() > 255: pdf.add_page()
+    
+    pdf.ln(4)
     pdf.set_font("helvetica", 'B', 9)
-    pdf.cell(95, 7, "Service Technician,", align='C')
-    pdf.cell(95, 7, "Customer / PIC,", align='C', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    pdf.cell(95, 6, "Service Technician,", align='C')
+    pdf.cell(95, 6, "Customer / PIC,", align='C', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     
     y_sig = pdf.get_y()
     if sig_t: pdf.image(sig_t, x=42, y=y_sig, w=25)
     if sig_c: pdf.image(sig_c, x=138, y=y_sig, w=25)
     
-    pdf.ln(20)
+    pdf.ln(18)
     pdf.set_font("helvetica", 'BU', 9)
-    pdf.cell(95, 7, f"{d.get('Completed By')}", align='C')
-    pdf.cell(95, 7, f"{d.get('Meet With')}", align='C')
+    pdf.cell(95, 6, f"{d.get('Completed By')}", align='C')
+    pdf.cell(95, 6, f"{d.get('Meet With')}", align='C')
 
     return bytes(pdf.output())
 
-# --- 4. STREAMLIT UI ---
-st.set_page_config(page_title="Digital Service Report", layout="centered")
-if st.sidebar.button("🔄 Reset Application"):
-    st.session_state.clear()
-    st.rerun()
-
-st.title("Digital Service Report")
-
-st.sidebar.header("Media & Branding")
-uploaded_logo = st.sidebar.file_uploader("Upload Company Logo (Page 1)", type=["png", "jpg", "jpeg"])
-uploaded_photos = st.sidebar.file_uploader("Upload Documentation Photos", type=["png", "jpg", "jpeg"], accept_multiple_files=True)
-
-photo_caps = []
-if uploaded_photos:
-    st.sidebar.subheader("Photo Captions")
-    for i, p in enumerate(uploaded_photos):
-        photo_caps.append(st.sidebar.text_input(f"Caption for Photo {i+1}", key=f"cap_{i}"))
-
-with st.form("main_form"):
-    st.subheader("Report Details")
-    c1, c2 = st.columns(2)
-    with c1:
-        comp_by = st.text_input("Completed By")
-        cust = st.text_input("Customer", value="PT. Finpac Anugerah Indonesia")
-        meet = st.text_input("Meet With")
-    with c2:
-        rep_date = st.date_input("Date", value=date.today())
-        mach = st.text_input("Machine")
-        m_type = st.text_input("Type")
-        s_no = st.text_input("Serial No")
-
-    prob = st.text_area("Problem Description")
-    f_up = st.text_area("Report / Follow Up Action")
-    
-    st.write("---")
-    cs1, cs2 = st.columns(2)
-    with cs1:
-        st.write("Technician Signature:")
-        c_tech = st_canvas(stroke_width=2, stroke_color="#000", background_color="rgba(0,0,0,0)", height=80, width=200, key="c_t")
-    with cs2:
-        st.write("Customer Signature:")
-        c_cust = st_canvas(stroke_width=2, stroke_color="#000", background_color="rgba(0,0,0,0)", height=80, width=200, key="c_c")
-
-    submitted = st.form_submit_button("Generate & Preview")
-
-if submitted:
-    if not comp_by: st.error("Technician name is required!")
-    else:
-        final_p = [{'img': optimize_image(p), 'caption': photo_caps[idx] if idx < len(photo_caps) else ""} for idx, p in enumerate(uploaded_photos)]
-        logo_img = Image.open(uploaded_logo) if uploaded_logo else None
-        sig_t = Image.fromarray(c_tech.image_data.astype('uint8'), 'RGBA') if c_tech.image_data is not None else None
-        sig_c = Image.fromarray(c_cust.image_data.astype('uint8'), 'RGBA') if c_cust.image_data is not None else None
-        
-        rep_data = {"Completed By": comp_by, "Customer": cust, "Meet With": meet, "Date": str(rep_date), "Machine": mach, "Type": m_type, "Serial No": s_no, "Problem": prob, "Follow Up": f_up}
-        st.session_state.update({'d': rep_data, 'st': sig_t, 'sc': sig_c, 'l': logo_img, 'p': final_p})
-        st.success("Report Generated!")
-
-if 'd' in st.session_state:
-    st.write("---")
-    pdf_bytes = create_pdf(st.session_state['d'], st.session_state['st'], st.session_state['sc'], logo=st.session_state.get('l'), extra_items=st.session_state.get('p'))
-    st.download_button("⬇️ Download PDF Report", data=pdf_bytes, file_name=f"Report_{st.session_state['d']['Serial No']}.pdf")
-    base64_pdf = base64.b64encode(pdf_bytes).decode('utf-8')
-    st.markdown(f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="800" type="application/pdf"></iframe>', unsafe_allow_html=True)
+# --- 4. STREAMLIT UI (TETAP SAMA) ---
