@@ -19,7 +19,6 @@ class PDF(FPDF):
         self.logo_w = logo_w
 
     def header(self):
-        # Kop surat hanya muncul di halaman 1
         if self.page_no() == 1:
             if self.logo_img:
                 self.image(self.logo_img, x=10, y=8, w=self.logo_w)
@@ -45,9 +44,9 @@ def save_to_excel(new_data):
         st.error(f"Error Excel: {e}")
         return False
 
-# 4. FUNGSI PEMBUATAN PDF (FRAME FOLLOW UP + FOTO BERDAMPINGAN)
+# 4. FUNGSI PEMBUATAN PDF
 def create_pdf(data, sig_t=None, sig_c=None, logo=None, logo_w=30, extra_items=None):
-    pdf = PDF(logo_img=logo, logo_w=logo_w)
+    pdf = PDF(logo_img=logo)
     pdf.add_page()
     pdf.set_font("Arial", size=10)
     
@@ -62,7 +61,7 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, logo_w=30, extra_items=N
     
     pdf.ln(5)
     
-    # Masalah (Lebar Penuh)
+    # Masalah
     pdf.set_font("Arial", 'B', 10)
     pdf.cell(0, 8, "Problem Description:", ln=1)
     pdf.set_font("Arial", size=10)
@@ -70,53 +69,43 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, logo_w=30, extra_items=N
     
     pdf.ln(5)
 
-    # --- LOGIKA FRAME: FOLLOW UP (KIRI) & FOTO (KANAN) ---
-    start_y_frame = pdf.get_y()
-    col_width = 92 # Lebar masing-masing kolom
-
-    # Simpan posisi Y awal untuk kolom kanan
-    y_followup_start = pdf.get_y()
-    
-    # Kolom Kiri: Follow Up
+    # Follow Up Action
     pdf.set_font("Arial", 'B', 10)
-    pdf.cell(col_width, 8, "Report / Follow Up Action:", ln=1)
+    pdf.cell(0, 8, "Report / Follow Up Action:", ln=1)
     pdf.set_font("Arial", size=10)
-    pdf.multi_cell(col_width, 8, data['Follow Up'], border=1)
-    y_after_followup = pdf.get_y()
+    pdf.multi_cell(0, 8, data['Follow Up'], border=1)
 
-    # Kolom Kanan: Foto Dokumentasi
-    current_y_photo = y_followup_start
+    # --- LOGIKA LAMPIRAN GAMBAR (SATU FRAME DI BAWAH FOLLOW UP) ---
     if extra_items:
         valid_items = [item for item in extra_items if item['file']]
         for i, item in enumerate(valid_items):
-            x_pos = 108 # Posisi X kolom kanan
+            # Cek sisa ruang halaman sebelum gambar
+            if pdf.get_y() > 230:
+                pdf.add_page()
             
-            # Judul Lampiran
-            pdf.set_xy(x_pos, current_y_photo)
-            pdf.set_font("Arial", 'B', 8)
-            pdf.cell(col_width, 5, f"Attachment {i+1}:", ln=1)
+            pdf.ln(2)
+            pdf.set_font("Arial", 'B', 9)
+            pdf.cell(0, 6, f"Attachment {i+1}:", ln=1)
             
-            # Perhitungan Tinggi Foto Proporsional
+            # Hitung tinggi proporsional
             w_orig, h_orig = item['file'].size
-            img_w = 80 # Batasi lebar agar fit di kolom
+            img_w = 120 # Ukuran diperbesar karena tidak berdampingan
             img_h = (h_orig / w_orig) * img_w
             
             # Masukkan Gambar
-            pdf.image(item['file'], x=x_pos, y=pdf.get_y(), w=img_w)
+            pdf.image(item['file'], x=pdf.get_x() + 5, y=pdf.get_y(), w=img_w)
             
-            # Keterangan di bawah foto
-            pdf.set_xy(x_pos, pdf.get_y() + img_h + 1)
-            pdf.set_font("Arial", 'I', 7)
+            # Keterangan
+            pdf.set_y(pdf.get_y() + img_h + 2)
+            pdf.set_font("Arial", 'I', 8)
             pdf.multi_cell(img_w, 4, f"Ket: {item['caption']}")
-            
-            current_y_photo = pdf.get_y() + 2
-
-    # Tentukan titik terbawah agar tanda tangan tidak menabrak
-    final_y = max(y_after_followup, current_y_photo)
-    pdf.set_y(final_y + 10)
+            pdf.ln(2)
 
     # Tanda Tangan
-    if pdf.get_y() > 240: pdf.add_page()
+    if pdf.get_y() > 240:
+        pdf.add_page()
+    
+    pdf.ln(5)
     pdf.set_font("Arial", 'B', 10)
     pdf.cell(95, 10, "Technician,", align='C')
     pdf.cell(95, 10, "Customer,", ln=1, align='C')
@@ -125,7 +114,7 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, logo_w=30, extra_items=N
     if sig_t: pdf.image(sig_t, x=42, y=sig_y, w=25)
     if sig_c: pdf.image(sig_c, x=138, y=sig_y, w=25)
     
-    pdf.ln(20)
+    pdf.ln(25)
     pdf.set_font("Arial", '', 10)
     pdf.cell(95, 10, f"( {data['Completed By']} )", align='C')
     pdf.cell(95, 10, f"( {data['Meet With']} )", ln=1, align='C')
@@ -133,7 +122,7 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, logo_w=30, extra_items=N
     return bytes(pdf.output())
 
 # 5. ANTARMUKA STREAMLIT
-st.set_page_config(page_title="Service Report System", layout="wide")
+st.set_page_config(page_title="Service Report System", layout="centered")
 st.title("Digital Service Report")
 
 # Sidebar
@@ -142,21 +131,21 @@ uploaded_logo = st.sidebar.file_uploader("Logo Kop", type=["png", "jpg", "jpeg"]
 logo_w = st.sidebar.slider("Lebar Logo (mm)", 10, 100, 30)
 st.sidebar.divider()
 st.sidebar.subheader("Foto Dokumentasi")
-img1 = st.sidebar.file_uploader("Foto 1", type=["png", "jpg", "jpeg"], key="img1")
-cap1 = st.sidebar.text_input("Ket Foto 1", key="cap1")
-img2 = st.sidebar.file_uploader("Foto 2", type=["png", "jpg", "jpeg"], key="img2")
-cap2 = st.sidebar.text_input("Ket Foto 2", key="cap2")
+img1 = st.sidebar.file_uploader("Foto 1", type=["png", "jpg", "jpeg"], key="u1")
+cap1 = st.sidebar.text_input("Ket Foto 1", key="t1")
+img2 = st.sidebar.file_uploader("Foto 2", type=["png", "jpg", "jpeg"], key="u2")
+cap2 = st.sidebar.text_input("Ket Foto 2", key="t2")
 
-# FORM INPUT UTAMA
+# FORM INPUT
 with st.form("main_form"):
     c1, c2 = st.columns(2)
     with c1:
-        completed_by = st.text_input("Completed By (Teknisi)")
+        completed_by = st.text_input("Completed By")
         customer = st.text_input("Customer", value="PT. Finpac Anugerah Indonesia")
         machine = st.text_input("Machine")
     with c2:
         report_date = st.date_input("Date", value=date.today())
-        meet_with = st.text_input("Meet With (PIC)")
+        meet_with = st.text_input("Meet With")
         sc1, sc2 = st.columns(2)
         with sc1: m_type = st.text_input("Type")
         with sc2: serial_no = st.text_input("Serial No")
@@ -180,11 +169,11 @@ if submitted:
     if not completed_by:
         st.error("Nama Teknisi harus diisi!")
     else:
-        # Konversi data ke Session State
+        # Konversi data
         logo_img = Image.open(uploaded_logo) if uploaded_logo else None
         e_items = [
-            {'file': Image.open(img1) if img1 else None, 'caption': cap1, 'width': 80},
-            {'file': Image.open(img2) if img2 else None, 'caption': cap2, 'width': 80}
+            {'file': Image.open(img1) if img1 else None, 'caption': cap1},
+            {'file': Image.open(img2) if img2 else None, 'caption': cap2}
         ]
         img_t = Image.fromarray(c_tech.image_data.astype('uint8'), 'RGBA') if c_tech.image_data is not None else None
         img_c = Image.fromarray(c_cust.image_data.astype('uint8'), 'RGBA') if c_cust.image_data is not None else None
@@ -197,21 +186,16 @@ if submitted:
         
         if save_to_excel(report_data):
             st.session_state.update({
-                'last_data': report_data, 
-                'sig_t': img_t, 
-                'sig_c': img_c, 
-                'logo': logo_img, 
-                'logo_w': logo_w, 
-                'extra_items': e_items
+                'last_data': report_data, 'sig_t': img_t, 'sig_c': img_c, 
+                'logo': logo_img, 'logo_w': logo_w, 'extra_items': e_items
             })
-            st.success("Laporan tersimpan di database!")
+            st.success("Data tersimpan!")
 
-# TAMPILAN PREVIEW PDF ASLI
-if st.session_state.get('last_data'):
+# LIVE PREVIEW PDF
+if 'last_data' in st.session_state:
     st.write("---")
     st.subheader("🔍 PDF Live Preview")
     
-    # Generate PDF bytes
     pdf_bytes = create_pdf(
         st.session_state['last_data'], 
         st.session_state['sig_t'], 
@@ -221,16 +205,14 @@ if st.session_state.get('last_data'):
         extra_items=st.session_state.get('extra_items')
     )
 
-    # Embedding PDF ke HTML untuk preview
+    # Encode PDF ke base64
     base64_pdf = base64.b64encode(pdf_bytes).decode('utf-8')
-    pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="850" type="application/pdf"></iframe>'
+    pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="800" type="application/pdf"></iframe>'
     
     st.markdown(pdf_display, unsafe_allow_html=True)
     
-    # Tombol Download Final
-    st.divider()
     st.download_button(
-        label="⬇️ Download PDF Service Report",
+        label="⬇️ Download PDF Sekarang",
         data=pdf_bytes,
         file_name=f"Report_{st.session_state['last_data']['Serial No']}.pdf",
         mime="application/pdf"
