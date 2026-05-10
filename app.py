@@ -1,5 +1,5 @@
 import streamlit as st
-import pandas as pd
+import pd
 from datetime import date
 from fpdf import FPDF
 import os
@@ -26,7 +26,18 @@ class PDF(FPDF):
             self.line(10, self.get_y(), 200, self.get_y())
             self.ln(5)
 
-# 2. FUNGSI PEMBUATAN PDF (DENGAN ADJUS UKURAN FOTO)
+# 2. FUNGSI OPTIMASI GAMBAR (AUTO CONVERT/RESIZE)
+def optimize_image(uploaded_file, max_size=(800, 800)):
+    """Mengecilkan resolusi gambar agar PDF ringan tanpa merusak kualitas cetak"""
+    img = Image.open(uploaded_file)
+    # Konversi ke RGB jika formatnya RGBA (untuk menghindari error PDF)
+    if img.mode in ("RGBA", "P"):
+        img = img.convert("RGB")
+    # Resize otomatis jika gambar terlalu besar (misal 4000px jadi 800px)
+    img.thumbnail(max_size, Image.LANCZOS)
+    return img
+
+# 3. FUNGSI PEMBUATAN PDF
 def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None, img_width_adj=100):
     pdf = PDF(logo_img=logo)
     pdf.add_page()
@@ -42,8 +53,6 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None, img_wi
     pdf.cell(47.5, 10, f"Serial No: {data['Serial No']}", border=1, ln=1)
     
     pdf.ln(5)
-    
-    # Masalah & Follow Up
     pdf.set_font("Arial", 'B', 10)
     pdf.cell(0, 8, "Problem Description:", ln=1)
     pdf.set_font("Arial", size=10)
@@ -55,23 +64,20 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None, img_wi
     pdf.set_font("Arial", size=10)
     pdf.multi_cell(0, 8, data['Follow Up'], border=1)
 
-    # --- LOGIKA LAMPIRAN DENGAN UKURAN ADJUSTABLE ---
+    # --- LOGIKA LAMPIRAN ---
     if extra_items:
         pdf.ln(5)
         for i, item in enumerate(extra_items):
-            # Hitung proporsi berdasarkan lebar yang di-adjust
             w_orig, h_orig = item.size
             img_w = img_width_adj 
             img_h = (h_orig / w_orig) * img_w
             
-            # Cek jika sisa halaman tidak cukup untuk foto + judul
             if pdf.get_y() + img_h > 250:
                 pdf.add_page()
             
             pdf.set_font("Arial", 'B', 9)
             pdf.cell(0, 7, f"Attachment {i+1}:", ln=1)
             
-            # Masukkan Gambar (posisi tengah otomatis)
             x_pos = (210 - img_w) / 2
             pdf.image(item, x=x_pos, y=pdf.get_y(), w=img_w)
             pdf.set_y(pdf.get_y() + img_h + 8) 
@@ -79,7 +85,6 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None, img_wi
     # Tanda Tangan
     if pdf.get_y() > 240: pdf.add_page()
     pdf.ln(5)
-    pdf.set_font("Arial", 'B', 10)
     pdf.cell(95, 10, "Technician,", align='C')
     pdf.cell(95, 10, "Customer,", ln=1, align='C')
     
@@ -93,19 +98,18 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None, img_wi
 
     return bytes(pdf.output())
 
-# 3. INTERFACE STREAMLIT
+# 4. INTERFACE STREAMLIT
 st.set_page_config(page_title="Service Report", layout="centered")
 st.title("Digital Service Report")
 
-# Sidebar
 st.sidebar.header("Media & Settings")
 uploaded_logo = st.sidebar.file_uploader("Upload Logo", type=["png", "jpg"])
 st.sidebar.divider()
 st.sidebar.subheader("Foto Lampiran")
-uploaded_photos = st.sidebar.file_uploader("Pilih Foto", type=["png", "jpg", "jpeg"], accept_multiple_files=True)
+uploaded_photos = st.sidebar.file_uploader("Upload Foto (Auto-Resize Aktif)", type=["png", "jpg", "jpeg"], accept_multiple_files=True)
 
-# Slider untuk Adjust Ukuran Foto di PDF
-img_adj = st.sidebar.slider("Adjust Lebar Foto (mm)", 30, 180, 100)
+# Slider Adjust tetap ada untuk mengatur lebar tampilan di kertas PDF
+img_adj = st.sidebar.slider("Lebar Tampilan Foto di PDF (mm)", 30, 180, 100)
 
 with st.form("main_form"):
     c1, c2 = st.columns(2)
@@ -126,10 +130,10 @@ with st.form("main_form"):
     st.divider()
     cs1, cs2 = st.columns(2)
     with cs1:
-        st.write("Tanda Tangan Teknisi:")
+        st.write("Teknisi:")
         c_tech = st_canvas(stroke_width=2, stroke_color="#000", background_color="rgba(0,0,0,0)", height=120, width=250, key="c_t")
     with cs2:
-        st.write("Tanda Tangan Customer:")
+        st.write("Customer:")
         c_cust = st_canvas(stroke_width=2, stroke_color="#000", background_color="rgba(0,0,0,0)", height=120, width=250, key="c_c")
 
     submitted = st.form_submit_button("Simpan & Lihat Preview")
@@ -137,8 +141,10 @@ with st.form("main_form"):
 if submitted:
     if not completed_by: st.error("Isi Nama Teknisi!")
     else:
-        logo_img = Image.open(uploaded_logo) if uploaded_logo else None
-        list_photos = [Image.open(p) for p in uploaded_photos] if uploaded_photos else []
+        # LOGIKA OTOMATIS: Mengecilkan file yang besar sebelum masuk PDF
+        logo_img = optimize_image(uploaded_logo, (400, 400)) if uploaded_logo else None
+        list_photos = [optimize_image(p, (1000, 1000)) for p in uploaded_photos] if uploaded_photos else []
+        
         img_t = Image.fromarray(c_tech.image_data.astype('uint8'), 'RGBA') if c_tech.image_data is not None else None
         img_c = Image.fromarray(c_cust.image_data.astype('uint8'), 'RGBA') if c_cust.image_data is not None else None
         
@@ -152,9 +158,9 @@ if submitted:
             'last_data': report_data, 'sig_t': img_t, 'sig_c': img_c, 
             'logo': logo_img, 'extra_items': list_photos, 'img_adj': img_adj
         })
-        st.success("Data tersimpan!")
+        st.success("Data Berhasil Dioptimalkan & Tersimpan!")
 
-# TAMPILAN PREVIEW PDF
+# PREVIEW
 if 'last_data' in st.session_state:
     st.write("---")
     st.subheader("🔍 PDF Live Preview")
@@ -171,5 +177,4 @@ if 'last_data' in st.session_state:
     base64_pdf = base64.b64encode(pdf_bytes).decode('utf-8')
     pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="800" type="application/pdf"></iframe>'
     st.markdown(pdf_display, unsafe_allow_html=True)
-    
     st.download_button("⬇️ Download PDF", data=pdf_bytes, file_name=f"Report_{st.session_state['last_data']['Serial No']}.pdf", mime="application/pdf")
