@@ -8,7 +8,7 @@ from PIL import Image
 import io
 import base64
 
-# --- KONFIGURASI ---
+# --- KONFIGURASI FILE ---
 EXCEL_FILE = "service_reports.xlsx"
 
 class PDF(FPDF):
@@ -19,7 +19,7 @@ class PDF(FPDF):
     def header(self):
         if self.page_no() == 1:
             if self.logo_img:
-                # Logo perusahaan
+                # Menggunakan logo perusahaan 
                 self.image(self.logo_img, x=10, y=8, w=30)
             self.set_font('helvetica', 'B', 14)
             self.cell(0, 10, 'SERVICE REPORT', align='R', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
@@ -34,7 +34,7 @@ def optimize_image(uploaded_file, max_res=(800, 800)):
     img = Image.open(uploaded_file)
     if img.mode in ("RGBA", "P"):
         img = img.convert("RGB")
-    # Perkecil resolusi secara signifikan untuk menghemat memori websockets
+    # Perkecil resolusi untuk menghemat memori websockets 
     img.thumbnail(max_res, Image.Resampling.LANCZOS)
     return img
 
@@ -56,7 +56,7 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None, img_wi
     pdf.add_page()
     pdf.set_font("helvetica", size=10)
     
-    # Tabel Informasi (Format Baru fpdf2)
+    # Tabel Informasi Utama 
     pdf.cell(95, 10, f"Completed By: {data['Completed By']}", border=1)
     pdf.cell(95, 10, f"Customer: {data['Customer']}", border=1, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.cell(95, 10, f"Machine: {data['Machine']}", border=1)
@@ -69,24 +69,24 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None, img_wi
     pdf.set_font("helvetica", 'B', 10)
     pdf.cell(0, 8, "Problem Description:", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.set_font("helvetica", size=10)
-    pdf.multi_cell(0, 8, data['Problem'], border=1)
+    pdf.multi_cell(0, 10, data['Problem'], border=1)
     
     pdf.ln(5)
     pdf.set_font("helvetica", 'B', 10)
     pdf.cell(0, 8, "Report / Follow Up Action:", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.set_font("helvetica", size=10)
-    pdf.multi_cell(0, 8, data['Follow Up'], border=1)
+    pdf.multi_cell(0, 10, data['Follow Up'], border=1)
+    pdf.ln(5)
 
-    # Lampiran Foto
+    # Lampiran Foto 
     if extra_items:
-        pdf.ln(5)
         for i, item in enumerate(extra_items):
-            # Pastikan 'item' adalah objek PIL Image
+            # Hitung rasio asli gambar agar tinggi akurat 
             w_orig, h_orig = item.size
             img_w = img_width_adj 
             img_h = (h_orig / w_orig) * img_w
             
-            if pdf.get_y() + img_h > 250:
+            if pdf.get_y() + img_h > 240:
                 pdf.add_page()
             
             pdf.set_font("helvetica", 'B', 9)
@@ -96,8 +96,9 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None, img_wi
             pdf.image(item, x=x_pos, y=pdf.get_y(), w=img_w)
             pdf.set_y(pdf.get_y() + img_h + 8) 
 
-    # Tanda Tangan
-    if pdf.get_y() > 240: pdf.add_page()
+    # Tanda Tangan 
+    if pdf.get_y() > 230:
+        pdf.add_page()
     pdf.ln(5)
     pdf.set_font("helvetica", 'B', 10)
     pdf.cell(95, 10, "Technician,", align='C')
@@ -151,14 +152,13 @@ with st.form("main_form"):
     submitted = st.form_submit_button("Simpan & Lihat Preview")
 
 if submitted:
-    if not completed_by or not serial_no:
-        st.error("Lengkapi data minimal Nama Teknisi dan Serial No!")
+    if not completed_by:
+        st.error("Lengkapi data minimal Nama Teknisi!")
     else:
-        # Optimasi gambar agar tidak crash (Max 800px)
+        # Optimasi gambar agar tidak crash 
         logo_img = optimize_image(uploaded_logo, (300, 300))
         list_photos = [optimize_image(p, (800, 800)) for p in uploaded_photos] if uploaded_photos else []
         
-        # Proses Tanda Tangan
         sig_t_img = Image.fromarray(c_tech.image_data.astype('uint8'), 'RGBA') if c_tech.image_data is not None else None
         sig_c_img = Image.fromarray(c_cust.image_data.astype('uint8'), 'RGBA') if c_cust.image_data is not None else None
         
@@ -191,7 +191,6 @@ if 'last_data' in st.session_state:
     )
 
     base64_pdf = base64.b64encode(pdf_bytes).decode('utf-8')
-    # Menggunakan iframe untuk preview
     pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="800" type="application/pdf"></iframe>'
     st.markdown(pdf_display, unsafe_allow_html=True)
     
