@@ -59,7 +59,6 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None, img_wi
     pdf.set_font("helvetica", 'B', 9)
     pdf.set_fill_color(240, 240, 240)
     
-    # Grid Data
     fields = [
         ("Technician", data['Completed By'], "Customer", data['Customer']),
         ("Machine", data['Machine'], "Date", data['Date']),
@@ -78,6 +77,30 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None, img_wi
     
     pdf.ln(8)
     
+    # --- SECTION CONTENT ---
+    pdf.set_draw_color(41, 128, 185) # Biru
+    
+    # Problem Description
+    pdf.set_font("helvetica", 'B', 10)
+    # PERBAIKAN DISINI: border='B' (bukan b='B')
+    pdf.cell(0, 8, "PROBLEM DESCRIPTION", border='B', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    pdf.ln(2)
+    pdf.set_font("helvetica", '', 10)
+    pdf.multi_cell(0, 6, data['Problem'], border=0)
+    pdf.ln(5)
+    
+    # Follow Up Action
+    pdf.set_font("helvetica", 'B', 10)
+    # PERBAIKAN DISINI: border='B' (bukan b='B')
+    pdf.cell(0, 8, "REPORT / FOLLOW UP ACTION", border='B', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    pdf.ln(2)
+    pdf.set_font("helvetica", '', 10)
+    pdf.multi_cell(0, 6, data['Follow Up'], border=0)
+
+    # ... (Sisa kode untuk lampiran foto dan tanda tangan tetap sama)
+    # Pastikan bagian tanda tangan juga menggunakan border=0 atau border=1
+    
+    return bytes(pdf.output())    
     # --- SEKSI ISI LAPORAN ---
     pdf.set_draw_color(41, 128, 185)
     
