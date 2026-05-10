@@ -18,31 +18,27 @@ class PDF(FPDF):
 
     def header(self):
         if self.page_no() == 1:
-            # 1. Penempatan Logo Benar-Benar di TENGAH (CENTER)
+            # 1. LOGO CENTER (Menggunakan lebar tetap agar perhitungan X akurat)
             if self.logo_img:
-                # Ambil dimensi asli logo untuk menghitung proporsi
+                logo_h = 25  # Tinggi logo diperbesar
+                # Menghitung lebar proporsional agar bisa diletakkan tepat di tengah
                 w_orig, h_orig = self.logo_img.size
-                logo_height = 25 # Tinggi logo yang diinginkan
-                # Hitung lebar logo yang dihasilkan berdasarkan tinggi 25mm
-                logo_width = (w_orig / h_orig) * logo_height
-                
-                # Lebar A4 = 210mm. 
-                # Rumus Center: (210 - lebar_logo) / 2
-                x_centered = (210 - logo_width) / 2
-                
-                self.image(self.logo_img, x=x_centered, y=10, h=logo_height) 
-                self.ln(logo_height + 5) 
+                logo_w = (w_orig / h_orig) * logo_h
+                x_pos = (210 - logo_w) / 2
+                self.image(self.logo_img, x=x_pos, y=10, h=logo_h)
+                self.ln(logo_h + 5) # Jarak ke banner
 
-            # 2. Banner Judul Laporan
+            # 2. BANNER SERVICE REPORT (Warna Biru Finpac)
             self.set_fill_color(41, 128, 185) 
             self.set_text_color(255, 255, 255)
-            self.set_font('helvetica', 'B', 14)
-            self.cell(0, 12, "SERVICE REPORT", fill=True, align='C', border=0, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+            self.set_font('helvetica', 'B', 15)
+            self.cell(0, 12, "SERVICE REPORT", fill=True, align='C', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
             
+            # Reset warna teks ke hitam
             self.set_text_color(0, 0, 0)
             self.ln(5)
 
-def optimize_image(uploaded_file, max_res=(1000, 1000)):
+def optimize_image(uploaded_file, max_res=(800, 800)):
     if uploaded_file is None: return None
     img = Image.open(uploaded_file)
     if img.mode in ("RGBA", "P"): img = img.convert("RGB")
@@ -67,7 +63,7 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
     pdf = PDF(logo_img=logo)
     pdf.add_page()
     
-    # --- INFO BOX ---
+    # --- DATA INFORMASI (Urutan Diperbaiki) ---
     pdf.set_font("helvetica", 'B', 9)
     pdf.set_fill_color(240, 240, 240)
     
@@ -128,27 +124,31 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
         pdf.cell(0, 10, "DOCUMENTATION PHOTOS", align='C', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         pdf.ln(5)
         
-        col_width, row_height, margin = 90, 70, 10
+        # Grid settings
+        cw, rh, gap = 90, 75, 10
         for i, item in enumerate(extra_items):
-            col = i % 2
-            row = (i // 2) % 2
             if i > 0 and i % 4 == 0:
                 pdf.add_page()
-                pdf.set_font("helvetica", 'B', 12)
                 pdf.cell(0, 10, "DOCUMENTATION PHOTOS (Cont.)", align='C', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
                 pdf.ln(5)
             
-            x_pos = margin + (col * (col_width + 10))
-            y_start = 30 + (row * (row_height + 25))
+            col = i % 2
+            row = (i // 2) % 2
+            x = 10 + (col * (cw + gap))
+            y = 30 + (row * (rh + 15))
+            
+            # Border & Image
             pdf.set_draw_color(200, 200, 200)
-            pdf.rect(x_pos, y_start, col_width, row_height)
-            pdf.image(item['img'], x=x_pos+2, y=y_start+2, w=col_width-4, h=row_height-10)
-            pdf.set_xy(x_pos, y_start + row_height - 6)
+            pdf.rect(x, y, cw, rh)
+            pdf.image(item['img'], x=x+2, y=y+2, w=cw-4, h=rh-10)
+            
+            # Caption
+            pdf.set_xy(x, y + rh - 6)
             pdf.set_font("helvetica", 'I', 7)
-            pdf.cell(col_width, 5, f"Photo {i+1}: {item['caption'][:50]}", align='C')
+            pdf.cell(cw, 5, f"Photo {i+1}: {item['caption'][:50]}", align='C')
 
     # --- TANDA TANGAN ---
-    pdf.set_y(-60)
+    pdf.set_y(-55)
     pdf.set_font("helvetica", 'B', 10)
     pdf.cell(95, 10, "Service Technician,", align='C')
     pdf.cell(95, 10, "Customer / PIC,", align='C', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
@@ -210,7 +210,6 @@ if submitted:
     if not completed_by: st.error("Lengkapi data!")
     else:
         final_list = [{'img': optimize_image(i['file']), 'caption': i['caption']} for i in photo_data]
-        # Pastikan logo di-load sebagai PIL Image agar bisa dihitung dimensinya
         logo_img = Image.open(uploaded_logo) if uploaded_logo else None
         sig_t_img = Image.fromarray(c_tech.image_data.astype('uint8'), 'RGBA') if c_tech.image_data is not None else None
         sig_c_img = Image.fromarray(c_cust.image_data.astype('uint8'), 'RGBA') if c_cust.image_data is not None else None
@@ -223,7 +222,7 @@ if submitted:
         
         if save_to_excel(report_data):
             st.session_state.update({'last_data': report_data, 'sig_t': sig_t_img, 'sig_c': sig_c_img, 'logo': logo_img, 'extra_items': final_list})
-            st.success("Data Tersimpan!")
+            st.success("Laporan Berhasil Disimpan!")
 
 if 'last_data' in st.session_state:
     st.write("---")
