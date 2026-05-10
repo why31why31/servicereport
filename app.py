@@ -20,8 +20,6 @@ class PDF(FPDF):
         if self.page_no() == 1:
             if self.logo_img:
                 self.image(self.logo_img, x=10, y=8, w=30)
-            
-            # Judul Laporan dengan Style Estetik (Biru Tua)
             self.set_fill_color(41, 128, 185) 
             self.set_text_color(255, 255, 255)
             self.set_font('helvetica', 'B', 16)
@@ -29,7 +27,6 @@ class PDF(FPDF):
             self.set_text_color(0, 0, 0)
             self.ln(5)
 
-# --- FUNGSI OPTIMASI GAMBAR ---
 def optimize_image(uploaded_file, max_res=(800, 800)):
     if uploaded_file is None: return None
     img = Image.open(uploaded_file)
@@ -50,12 +47,12 @@ def save_to_excel(new_data):
         st.error(f"Error Excel: {e}")
         return False
 
-# --- FUNGSI BUAT PDF ESTETIK ---
+# --- FUNGSI BUAT PDF (PERBAIKAN PARAMETER BORDER) ---
 def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None, img_width_adj=100):
     pdf = PDF(logo_img=logo)
     pdf.add_page()
     
-    # --- INFO BOX MODERN ---
+    # --- INFO BOX ---
     pdf.set_font("helvetica", 'B', 9)
     pdf.set_fill_color(240, 240, 240)
     
@@ -77,12 +74,11 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None, img_wi
     
     pdf.ln(8)
     
-    # --- SECTION CONTENT ---
-    pdf.set_draw_color(41, 128, 185) # Biru
+    # --- ISI LAPORAN (BORDER FIXED) ---
+    pdf.set_draw_color(41, 128, 185)
     
     # Problem Description
     pdf.set_font("helvetica", 'B', 10)
-    # PERBAIKAN DISINI: border='B' (bukan b='B')
     pdf.cell(0, 8, "PROBLEM DESCRIPTION", border='B', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.ln(2)
     pdf.set_font("helvetica", '', 10)
@@ -91,30 +87,7 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None, img_wi
     
     # Follow Up Action
     pdf.set_font("helvetica", 'B', 10)
-    # PERBAIKAN DISINI: border='B' (bukan b='B')
     pdf.cell(0, 8, "REPORT / FOLLOW UP ACTION", border='B', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-    pdf.ln(2)
-    pdf.set_font("helvetica", '', 10)
-    pdf.multi_cell(0, 6, data['Follow Up'], border=0)
-
-    # ... (Sisa kode untuk lampiran foto dan tanda tangan tetap sama)
-    # Pastikan bagian tanda tangan juga menggunakan border=0 atau border=1
-    
-    return bytes(pdf.output())    
-    # --- SEKSI ISI LAPORAN ---
-    pdf.set_draw_color(41, 128, 185)
-    
-    # Problem Description
-    pdf.set_font("helvetica", 'B', 10)
-    pdf.cell(0, 8, "PROBLEM DESCRIPTION", b='B', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-    pdf.ln(2)
-    pdf.set_font("helvetica", '', 10)
-    pdf.multi_cell(0, 6, data['Problem'], border=0)
-    pdf.ln(5)
-    
-    # Follow Up Action
-    pdf.set_font("helvetica", 'B', 10)
-    pdf.cell(0, 8, "REPORT / FOLLOW UP ACTION", b='B', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.ln(2)
     pdf.set_font("helvetica", '', 10)
     pdf.multi_cell(0, 6, data['Follow Up'], border=0)
@@ -166,7 +139,7 @@ st.title("Digital Service Report")
 
 st.sidebar.header("Media & Settings")
 uploaded_logo = st.sidebar.file_uploader("Upload Logo", type=["png", "jpg", "jpeg"])
-uploaded_photos = st.sidebar.file_uploader("Pilih Foto Lampiran", type=["png", "jpg", "jpeg"], accept_multiple_files=True)
+uploaded_photos = st.sidebar.file_uploader("Pilih Foto Dokumentasi", type=["png", "jpg", "jpeg"], accept_multiple_files=True)
 
 photo_data = []
 if uploaded_photos:
@@ -196,10 +169,10 @@ with st.form("main_form"):
     st.divider()
     cs1, cs2 = st.columns(2)
     with cs1:
-        st.write("Teknisi:")
+        st.write("Tanda Tangan Teknisi:")
         c_tech = st_canvas(stroke_width=2, stroke_color="#000", background_color="rgba(0,0,0,0)", height=120, width=250, key="c_t")
     with cs2:
-        st.write("Customer:")
+        st.write("Tanda Tangan Customer:")
         c_cust = st_canvas(stroke_width=2, stroke_color="#000", background_color="rgba(0,0,0,0)", height=120, width=250, key="c_c")
 
     submitted = st.form_submit_button("Simpan & Lihat Preview")
@@ -207,7 +180,6 @@ with st.form("main_form"):
 if submitted:
     if not completed_by: st.error("Isi Nama Teknisi!")
     else:
-        # Optimasi Data
         final_list = [{'img': optimize_image(i['file']), 'caption': i['caption']} for i in photo_data]
         logo_img = optimize_image(uploaded_logo, (300, 300))
         sig_t_img = Image.fromarray(c_tech.image_data.astype('uint8'), 'RGBA') if c_tech.image_data is not None else None
@@ -223,12 +195,10 @@ if submitted:
             st.session_state.update({'last_data': report_data, 'sig_t': sig_t_img, 'sig_c': sig_c_img, 'logo': logo_img, 'extra_items': final_list, 'img_adj': img_adj})
             st.success("Tersimpan!")
 
-# --- PREVIEW (STABIL) ---
 if 'last_data' in st.session_state:
     st.write("---")
-    st.subheader("🔍 PDF Live Preview")
+    st.subheader("🔍 PDF Preview")
     pdf_bytes = create_pdf(st.session_state['last_data'], st.session_state['sig_t'], st.session_state['sig_c'], logo=st.session_state.get('logo'), extra_items=st.session_state.get('extra_items'), img_width_adj=st.session_state.get('img_adj', 100))
     base64_pdf = base64.b64encode(pdf_bytes).decode('utf-8')
-    # Menggunakan embed agar tidak diblokir Chrome
     st.markdown(f'<embed src="data:application/pdf;base64,{base64_pdf}" width="100%" height="800" type="application/pdf">', unsafe_allow_html=True)
     st.download_button("⬇️ Download PDF", data=pdf_bytes, file_name=f"Report_{st.session_state['last_data']['Serial No']}.pdf")
