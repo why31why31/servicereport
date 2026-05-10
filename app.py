@@ -8,7 +8,7 @@ from PIL import Image
 import io
 import base64
 
-# --- 1. PEMBERSIHAN TEKS (UNICODE) ---
+# --- 1. TEXT CLEANING (PREVENT UNICODE ERRORS) ---
 def clean_text(text):
     if not text: return ""
     replacements = {
@@ -19,7 +19,7 @@ def clean_text(text):
         text = text.replace(search, replace)
     return text.encode('latin-1', 'ignore').decode('latin-1')
 
-# --- 2. OPTIMASI GAMBAR ---
+# --- 2. IMAGE OPTIMIZATION ---
 def optimize_image(uploaded_file, max_res=(600, 600)):
     if uploaded_file is None: return None
     img = Image.open(uploaded_file)
@@ -27,7 +27,7 @@ def optimize_image(uploaded_file, max_res=(600, 600)):
     img.thumbnail(max_res, Image.Resampling.LANCZOS)
     return img
 
-# --- 3. CLASS PDF (KOP HANYA HALAMAN 1) ---
+# --- 3. PDF CLASS (HEADER ON PAGE 1 ONLY) ---
 class PDF(FPDF):
     def __init__(self, logo_img=None):
         super().__init__()
@@ -35,7 +35,6 @@ class PDF(FPDF):
         self.set_auto_page_break(auto=True, margin=20)
 
     def header(self):
-        # PERUBAHAN DISINI: Hanya cetak logo jika halaman == 1
         if self.page_no() == 1:
             if self.logo_img:
                 w_orig, h_orig = self.logo_img.size
@@ -45,38 +44,39 @@ class PDF(FPDF):
                 self.image(self.logo_img, x=x_centered, y=8, h=logo_h)
                 self.ln(logo_h + 5)
 
-            # Judul Laporan Biru
-            self.set_fill_color(41, 128, 185) 
-            self.set_text_color(255, 255, 255)
+            self.set_fill_color(41, 128, 185) # Blue
+            self.set_text_color(255, 255, 255) # White
             self.set_font('helvetica', 'B', 14)
             self.cell(0, 10, "SERVICE REPORT", fill=True, align='C', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
             self.set_text_color(0, 0, 0)
             self.ln(3)
         else:
-            # Di halaman selain 1, beri jarak kecil agar tidak terlalu mepet ke atas
             self.ln(5)
 
-# --- 4. FUNGSI UTAMA PEMBUATAN PDF ---
+# --- 4. CORE PDF GENERATION FUNCTION ---
 def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
     pdf = PDF(logo_img=logo)
     pdf.add_page()
     
-    # --- DATA TEKNIS ---
+    # --- INFO BOX ---
     pdf.set_font("helvetica", 'B', 8)
     pdf.set_fill_color(240, 240, 240)
     h_row = 7
     d = {k: clean_text(str(v)) for k, v in data.items()}
 
+    # Row 1
     pdf.cell(30, h_row, " Technician", border=1, fill=True)
     pdf.set_font("helvetica", '', 8); pdf.cell(65, h_row, f" {d.get('Completed By')}", border=1)
     pdf.set_font("helvetica", 'B', 8); pdf.cell(30, h_row, " Customer", border=1, fill=True)
     pdf.set_font("helvetica", '', 8); pdf.cell(65, h_row, f" {d.get('Customer')}", border=1, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     
+    # Row 2
     pdf.set_font("helvetica", 'B', 8); pdf.cell(30, h_row, " Meet With", border=1, fill=True)
     pdf.set_font("helvetica", '', 8); pdf.cell(65, h_row, f" {d.get('Meet With')}", border=1)
     pdf.set_font("helvetica", 'B', 8); pdf.cell(30, h_row, " Date", border=1, fill=True)
     pdf.set_font("helvetica", '', 8); pdf.cell(65, h_row, f" {d.get('Date')}", border=1, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     
+    # Row 3
     pdf.set_font("helvetica", 'B', 8); pdf.cell(30, h_row, " Machine", border=1, fill=True)
     pdf.set_font("helvetica", '', 8); pdf.cell(65, h_row, f" {d.get('Machine')}", border=1)
     pdf.set_font("helvetica", 'B', 8); pdf.cell(15, h_row, " Type", border=1, fill=True)
@@ -86,7 +86,7 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
     
     pdf.ln(5)
     
-    # --- ISI LAPORAN ---
+    # --- REPORT CONTENT ---
     pdf.set_draw_color(41, 128, 185)
     pdf.set_font("helvetica", 'B', 10)
     pdf.cell(0, 7, "PROBLEM DESCRIPTION", border='B', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
@@ -101,7 +101,7 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
     pdf.set_font("helvetica", '', 9)
     pdf.multi_cell(0, 5, d.get('Follow Up'), border=0)
 
-    # --- FOTO LAMPIRAN (GRID 2x2) ---
+    # --- ATTACHMENTS (GRID 2x2) ---
     if extra_items:
         pdf.add_page()
         pdf.set_font("helvetica", 'B', 12)
@@ -120,7 +120,7 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
             pdf.cell(cw, 5, f"Photo {i+1}: {clean_text(item['caption'][:50])}", align='C')
         pdf.ln(20)
 
-    # --- TANDA TANGAN (HALAMAN TERAKHIR) ---
+    # --- SIGNATURES (ALWAYS ON LAST PAGE) ---
     if pdf.get_y() > 230: pdf.add_page()
     pdf.ln(10)
     pdf.set_font("helvetica", 'B', 9)
@@ -138,27 +138,28 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
 
     return bytes(pdf.output())
 
-# --- 5. UI STREAMLIT ---
-st.set_page_config(page_title="Service Report System", layout="centered")
+# --- 5. STREAMLIT UI ---
+st.set_page_config(page_title="Digital Service Report", layout="centered")
 
-if st.sidebar.button("🔄 Reset Aplikasi"):
+if st.sidebar.button("🔄 Reset Application"):
     st.session_state.clear()
     st.rerun()
 
 st.title("Digital Service Report")
 
-st.sidebar.header("Media & Kop")
-uploaded_logo = st.sidebar.file_uploader("Upload Logo (Kop Halaman 1)", type=["png", "jpg", "jpeg"])
-uploaded_photos = st.sidebar.file_uploader("Pilih Foto Dokumentasi", type=["png", "jpg", "jpeg"], accept_multiple_files=True)
+st.sidebar.header("Media & Branding")
+uploaded_logo = st.sidebar.file_uploader("Upload Company Logo (Page 1)", type=["png", "jpg", "jpeg"])
+uploaded_photos = st.sidebar.file_uploader("Upload Documentation Photos", type=["png", "jpg", "jpeg"], accept_multiple_files=True)
 
 photo_captions = []
 if uploaded_photos:
-    st.sidebar.subheader("Keterangan Foto")
+    st.sidebar.subheader("Photo Captions")
     for i, p in enumerate(uploaded_photos):
-        cap = st.sidebar.text_input(f"Ket Foto {i+1}", key=f"cap_{i}")
+        cap = st.sidebar.text_input(f"Caption for Photo {i+1}", key=f"cap_{i}")
         photo_captions.append(cap)
 
 with st.form("main_form"):
+    st.subheader("Report Details")
     c1, c2 = st.columns(2)
     with c1:
         comp_by = st.text_input("Completed By")
@@ -176,16 +177,16 @@ with st.form("main_form"):
     st.write("---")
     cs1, cs2 = st.columns(2)
     with cs1:
-        st.write("Teknisi:")
+        st.write("Technician Signature:")
         c_tech = st_canvas(stroke_width=2, stroke_color="#000", background_color="rgba(0,0,0,0)", height=100, width=200, key="c_t")
     with cs2:
-        st.write("Customer:")
+        st.write("Customer Signature:")
         c_cust = st_canvas(stroke_width=2, stroke_color="#000", background_color="rgba(0,0,0,0)", height=100, width=200, key="c_c")
 
     submitted = st.form_submit_button("Generate & Preview")
 
 if submitted:
-    if not comp_by: st.error("Isi Nama Teknisi!")
+    if not comp_by: st.error("Technician name is required!")
     else:
         final_photos = []
         if uploaded_photos:
@@ -203,12 +204,12 @@ if submitted:
             "Serial No": s_no, "Problem": prob, "Follow Up": f_up
         }
         st.session_state.update({'d': rep_data, 'st': sig_t, 'sc': sig_c, 'l': logo_img, 'p': final_photos})
-        st.success("Data Siap!")
+        st.success("Report Generated!")
 
 if 'd' in st.session_state:
     st.write("---")
     pdf_bytes = create_pdf(st.session_state['d'], st.session_state['st'], st.session_state['sc'], logo=st.session_state.get('l'), extra_items=st.session_state.get('p'))
-    st.download_button("⬇️ Download PDF", data=pdf_bytes, file_name=f"Report_{st.session_state['d']['Serial No']}.pdf")
+    st.download_button("⬇️ Download PDF Report", data=pdf_bytes, file_name=f"Report_{st.session_state['d']['Serial No']}.pdf")
     
     base64_pdf = base64.b64encode(pdf_bytes).decode('utf-8')
     st.markdown(f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="1000" type="application/pdf"></iframe>', unsafe_allow_html=True)
