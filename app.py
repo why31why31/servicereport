@@ -18,30 +18,27 @@ class PDF(FPDF):
 
     def header(self):
         if self.page_no() == 1:
-            # 1. Banner Biru Estetik sebagai Background Header
+            # 1. Penempatan Logo di Tengah (CENTER) dan Lebih Besar
+            if self.logo_img:
+                # Kita buat logo dengan tinggi 25mm agar lebih terlihat jelas
+                logo_height = 25 
+                # A4 lebar 210mm. Posisi X dihitung agar logo berada di tengah secara otomatis
+                # (Lebar Kertas 210 - Estimasi Lebar Logo) / 2
+                # Menggunakan x=-1 atau penghitungan manual:
+                self.image(self.logo_img, x=80, y=10, h=logo_height) 
+                self.ln(logo_height + 5) # Beri jarak setelah logo
+
+            # 2. Banner Judul Laporan (Diletakkan di bawah logo)
             self.set_fill_color(41, 128, 185) 
             self.set_text_color(255, 255, 255)
-            self.set_font('helvetica', 'B', 16)
-            # Banner sedikit lebih tinggi (20mm) untuk menampung logo di tengah
-            self.cell(0, 20, "SERVICE REPORT  ", fill=True, align='R', border=0, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-            
-            # 2. Penempatan Logo di Tengah (Center) & Proporsional
-            if self.logo_img:
-                # Tentukan tinggi logo (misal 12mm agar proporsional dalam banner 20mm)
-                logo_h = 12 
-                # Hitung posisi X agar center (Lebar kertas A4 adalah 210mm)
-                # Kita asumsikan lebar logo proporsional terhadap tinggi 12mm
-                # Menggunakan x=-1 di fpdf2 akan memicu auto-center jika dikombinasikan dengan lebar tertentu, 
-                # tapi kita hitung manual agar lebih presisi:
-                # (Lebar Kertas / 2) - (Estimasi Lebar Logo / 2)
-                # Untuk kemudahan, kita gunakan fitur posisi absolut:
-                self.image(self.logo_img, x=15, y=4, h=logo_h) 
-                # Catatan: Jika ingin benar-benar di tengah kertas, ganti x=15 menjadi x=85 (tergantung lebar logo)
+            self.set_font('helvetica', 'B', 14)
+            # Banner memanjang penuh
+            self.cell(0, 12, "SERVICE REPORT", fill=True, align='C', border=0, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
             
             self.set_text_color(0, 0, 0)
             self.ln(5)
 
-def optimize_image(uploaded_file, max_res=(800, 800)):
+def optimize_image(uploaded_file, max_res=(1000, 1000)):
     if uploaded_file is None: return None
     img = Image.open(uploaded_file)
     if img.mode in ("RGBA", "P"): img = img.convert("RGB")
@@ -66,11 +63,11 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
     pdf = PDF(logo_img=logo)
     pdf.add_page()
     
-    # --- INFO BOX (Layout yang sudah ditukar: Meet With di atas Machine) ---
+    # --- INFO BOX ---
     pdf.set_font("helvetica", 'B', 9)
     pdf.set_fill_color(240, 240, 240)
     
-    # Baris 1
+    # Baris 1: Technician & Customer
     pdf.cell(35, 8, " Technician", border=1, fill=True)
     pdf.set_font("helvetica", '', 9)
     pdf.cell(60, 8, f" {data['Completed By']}", border=1)
@@ -79,7 +76,7 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
     pdf.set_font("helvetica", '', 9)
     pdf.cell(60, 8, f" {data['Customer']}", border=1, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     
-    # Baris 2 (Meet With & Date)
+    # Baris 2: Meet With & Date
     pdf.set_font("helvetica", 'B', 9)
     pdf.cell(35, 8, " Meet With", border=1, fill=True)
     pdf.set_font("helvetica", '', 9)
@@ -89,12 +86,11 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
     pdf.set_font("helvetica", '', 9)
     pdf.cell(60, 8, f" {data['Date']}", border=1, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     
-    # Baris 3 (Machine, Type, Ser No)
+    # Baris 3: Machine, Type & Serial No
     pdf.set_font("helvetica", 'B', 9)
     pdf.cell(35, 8, " Machine", border=1, fill=True)
     pdf.set_font("helvetica", '', 9)
     pdf.cell(60, 8, f" {data['Machine']}", border=1)
-    
     pdf.set_font("helvetica", 'B', 9)
     pdf.cell(15, 8, " Type", border=1, fill=True)
     pdf.set_font("helvetica", '', 9)
@@ -210,7 +206,7 @@ if submitted:
     if not completed_by: st.error("Lengkapi data!")
     else:
         final_list = [{'img': optimize_image(i['file']), 'caption': i['caption']} for i in photo_data]
-        logo_img = optimize_image(uploaded_logo, (300, 300))
+        logo_img = optimize_image(uploaded_logo, (500, 500))
         sig_t_img = Image.fromarray(c_tech.image_data.astype('uint8'), 'RGBA') if c_tech.image_data is not None else None
         sig_c_img = Image.fromarray(c_cust.image_data.astype('uint8'), 'RGBA') if c_cust.image_data is not None else None
         
