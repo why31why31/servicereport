@@ -18,21 +18,25 @@ class PDF(FPDF):
 
     def header(self):
         if self.page_no() == 1:
-            # 1. Penempatan Logo di Tengah (CENTER) dan Lebih Besar
+            # 1. Penempatan Logo Benar-Benar di TENGAH (CENTER)
             if self.logo_img:
-                # Kita buat logo dengan tinggi 25mm agar lebih terlihat jelas
-                logo_height = 25 
-                # A4 lebar 210mm. Posisi X dihitung agar logo berada di tengah secara otomatis
-                # (Lebar Kertas 210 - Estimasi Lebar Logo) / 2
-                # Menggunakan x=-1 atau penghitungan manual:
-                self.image(self.logo_img, x=80, y=10, h=logo_height) 
-                self.ln(logo_height + 5) # Beri jarak setelah logo
+                # Ambil dimensi asli logo untuk menghitung proporsi
+                w_orig, h_orig = self.logo_img.size
+                logo_height = 25 # Tinggi logo yang diinginkan
+                # Hitung lebar logo yang dihasilkan berdasarkan tinggi 25mm
+                logo_width = (w_orig / h_orig) * logo_height
+                
+                # Lebar A4 = 210mm. 
+                # Rumus Center: (210 - lebar_logo) / 2
+                x_centered = (210 - logo_width) / 2
+                
+                self.image(self.logo_img, x=x_centered, y=10, h=logo_height) 
+                self.ln(logo_height + 5) 
 
-            # 2. Banner Judul Laporan (Diletakkan di bawah logo)
+            # 2. Banner Judul Laporan
             self.set_fill_color(41, 128, 185) 
             self.set_text_color(255, 255, 255)
             self.set_font('helvetica', 'B', 14)
-            # Banner memanjang penuh
             self.cell(0, 12, "SERVICE REPORT", fill=True, align='C', border=0, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
             
             self.set_text_color(0, 0, 0)
@@ -206,7 +210,8 @@ if submitted:
     if not completed_by: st.error("Lengkapi data!")
     else:
         final_list = [{'img': optimize_image(i['file']), 'caption': i['caption']} for i in photo_data]
-        logo_img = optimize_image(uploaded_logo, (500, 500))
+        # Pastikan logo di-load sebagai PIL Image agar bisa dihitung dimensinya
+        logo_img = Image.open(uploaded_logo) if uploaded_logo else None
         sig_t_img = Image.fromarray(c_tech.image_data.astype('uint8'), 'RGBA') if c_tech.image_data is not None else None
         sig_c_img = Image.fromarray(c_cust.image_data.astype('uint8'), 'RGBA') if c_cust.image_data is not None else None
         
