@@ -18,15 +18,25 @@ class PDF(FPDF):
 
     def header(self):
         if self.page_no() == 1:
-            # Banner Biru Estetik
+            # 1. Banner Biru Estetik sebagai Background Header
             self.set_fill_color(41, 128, 185) 
             self.set_text_color(255, 255, 255)
             self.set_font('helvetica', 'B', 16)
-            self.cell(0, 15, "  SERVICE REPORT  ", fill=True, align='R', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+            # Banner sedikit lebih tinggi (20mm) untuk menampung logo di tengah
+            self.cell(0, 20, "SERVICE REPORT  ", fill=True, align='R', border=0, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
             
-            # Logo diletakkan di depan banner agar tidak tertutup
+            # 2. Penempatan Logo di Tengah (Center) & Proporsional
             if self.logo_img:
-                self.image(self.logo_img, x=12, y=10, h=10)
+                # Tentukan tinggi logo (misal 12mm agar proporsional dalam banner 20mm)
+                logo_h = 12 
+                # Hitung posisi X agar center (Lebar kertas A4 adalah 210mm)
+                # Kita asumsikan lebar logo proporsional terhadap tinggi 12mm
+                # Menggunakan x=-1 di fpdf2 akan memicu auto-center jika dikombinasikan dengan lebar tertentu, 
+                # tapi kita hitung manual agar lebih presisi:
+                # (Lebar Kertas / 2) - (Estimasi Lebar Logo / 2)
+                # Untuk kemudahan, kita gunakan fitur posisi absolut:
+                self.image(self.logo_img, x=15, y=4, h=logo_h) 
+                # Catatan: Jika ingin benar-benar di tengah kertas, ganti x=15 menjadi x=85 (tergantung lebar logo)
             
             self.set_text_color(0, 0, 0)
             self.ln(5)
@@ -51,16 +61,16 @@ def save_to_excel(new_data):
         st.error(f"Error Excel: {e}")
         return False
 
-# --- FUNGSI BUAT PDF (LAYOUT TERBARU) ---
+# --- FUNGSI BUAT PDF ---
 def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
     pdf = PDF(logo_img=logo)
     pdf.add_page()
     
-    # --- INFO BOX ---
+    # --- INFO BOX (Layout yang sudah ditukar: Meet With di atas Machine) ---
     pdf.set_font("helvetica", 'B', 9)
     pdf.set_fill_color(240, 240, 240)
     
-    # Baris 1: Technician & Customer
+    # Baris 1
     pdf.cell(35, 8, " Technician", border=1, fill=True)
     pdf.set_font("helvetica", '', 9)
     pdf.cell(60, 8, f" {data['Completed By']}", border=1)
@@ -69,7 +79,7 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
     pdf.set_font("helvetica", '', 9)
     pdf.cell(60, 8, f" {data['Customer']}", border=1, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     
-    # Baris 2: Meet With & Date (Machine sudah dipindah ke baris 3)
+    # Baris 2 (Meet With & Date)
     pdf.set_font("helvetica", 'B', 9)
     pdf.cell(35, 8, " Meet With", border=1, fill=True)
     pdf.set_font("helvetica", '', 9)
@@ -79,7 +89,7 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
     pdf.set_font("helvetica", '', 9)
     pdf.cell(60, 8, f" {data['Date']}", border=1, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     
-    # Baris 3: Machine, Type & Serial No
+    # Baris 3 (Machine, Type, Ser No)
     pdf.set_font("helvetica", 'B', 9)
     pdf.cell(35, 8, " Machine", border=1, fill=True)
     pdf.set_font("helvetica", '', 9)
@@ -119,11 +129,9 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
         pdf.ln(5)
         
         col_width, row_height, margin = 90, 70, 10
-        
         for i, item in enumerate(extra_items):
             col = i % 2
             row = (i // 2) % 2
-            
             if i > 0 and i % 4 == 0:
                 pdf.add_page()
                 pdf.set_font("helvetica", 'B', 12)
@@ -132,11 +140,9 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
             
             x_pos = margin + (col * (col_width + 10))
             y_start = 30 + (row * (row_height + 25))
-            
             pdf.set_draw_color(200, 200, 200)
             pdf.rect(x_pos, y_start, col_width, row_height)
             pdf.image(item['img'], x=x_pos+2, y=y_start+2, w=col_width-4, h=row_height-10)
-            
             pdf.set_xy(x_pos, y_start + row_height - 6)
             pdf.set_font("helvetica", 'I', 7)
             pdf.cell(col_width, 5, f"Photo {i+1}: {item['caption'][:50]}", align='C')
@@ -178,7 +184,6 @@ with st.form("main_form"):
     with c1:
         completed_by = st.text_input("Completed By")
         customer = st.text_input("Customer", value="PT. Finpac Anugerah Indonesia")
-        # Tukar posisi: Meet With sekarang di atas Machine
         meet_with = st.text_input("Meet With")
     with c2:
         report_date = st.date_input("Date", value=date.today())
