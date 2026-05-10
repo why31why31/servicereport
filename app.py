@@ -24,9 +24,8 @@ class PDF(FPDF):
             self.set_font('helvetica', 'B', 16)
             self.cell(0, 15, "  SERVICE REPORT  ", fill=True, align='R', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
             
-            # Logo diletakkan setelah banner agar tidak tertutup (posisi mengambang)
+            # Logo diletakkan di depan banner agar tidak tertutup
             if self.logo_img:
-                # x=12, y=10 posisi di depan banner biru
                 self.image(self.logo_img, x=12, y=10, h=10)
             
             self.set_text_color(0, 0, 0)
@@ -52,7 +51,7 @@ def save_to_excel(new_data):
         st.error(f"Error Excel: {e}")
         return False
 
-# --- FUNGSI BUAT PDF (GRID 2x2 UNTUK FOTO) ---
+# --- FUNGSI BUAT PDF (LAYOUT TERBARU) ---
 def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
     pdf = PDF(logo_img=logo)
     pdf.add_page()
@@ -70,23 +69,22 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
     pdf.set_font("helvetica", '', 9)
     pdf.cell(60, 8, f" {data['Customer']}", border=1, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     
-    # Baris 2: Machine & Date
+    # Baris 2: Meet With & Date (Machine sudah dipindah ke baris 3)
     pdf.set_font("helvetica", 'B', 9)
-    pdf.cell(35, 8, " Machine", border=1, fill=True)
+    pdf.cell(35, 8, " Meet With", border=1, fill=True)
     pdf.set_font("helvetica", '', 9)
-    pdf.cell(60, 8, f" {data['Machine']}", border=1)
+    pdf.cell(60, 8, f" {data['Meet With']}", border=1)
     pdf.set_font("helvetica", 'B', 9)
     pdf.cell(35, 8, " Date", border=1, fill=True)
     pdf.set_font("helvetica", '', 9)
     pdf.cell(60, 8, f" {data['Date']}", border=1, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     
-    # Baris 3: Meet With, Type & Serial No
+    # Baris 3: Machine, Type & Serial No
     pdf.set_font("helvetica", 'B', 9)
-    pdf.cell(35, 8, " Meet With", border=1, fill=True)
+    pdf.cell(35, 8, " Machine", border=1, fill=True)
     pdf.set_font("helvetica", '', 9)
-    pdf.cell(60, 8, f" {data['Meet With']}", border=1)
+    pdf.cell(60, 8, f" {data['Machine']}", border=1)
     
-    # Grid kecil untuk Type dan Serial No
     pdf.set_font("helvetica", 'B', 9)
     pdf.cell(15, 8, " Type", border=1, fill=True)
     pdf.set_font("helvetica", '', 9)
@@ -120,17 +118,12 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
         pdf.cell(0, 10, "DOCUMENTATION PHOTOS", align='C', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         pdf.ln(5)
         
-        # Pengaturan Grid
-        col_width = 90
-        row_height = 70
-        margin = 10
+        col_width, row_height, margin = 90, 70, 10
         
         for i, item in enumerate(extra_items):
-            # Tentukan posisi X dan Y berdasarkan indeks (0, 1, 2, 3)
             col = i % 2
             row = (i // 2) % 2
             
-            # Jika sudah gambar ke-5, buat halaman baru
             if i > 0 and i % 4 == 0:
                 pdf.add_page()
                 pdf.set_font("helvetica", 'B', 12)
@@ -138,17 +131,12 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
                 pdf.ln(5)
             
             x_pos = margin + (col * (col_width + 10))
-            # Hitung Y berdasarkan row saat ini di halaman
             y_start = 30 + (row * (row_height + 25))
             
-            # Frame Foto
             pdf.set_draw_color(200, 200, 200)
             pdf.rect(x_pos, y_start, col_width, row_height)
-            
-            # Gambar (Fit to Box)
             pdf.image(item['img'], x=x_pos+2, y=y_start+2, w=col_width-4, h=row_height-10)
             
-            # Keterangan di bawah foto
             pdf.set_xy(x_pos, y_start + row_height - 6)
             pdf.set_font("helvetica", 'I', 7)
             pdf.cell(col_width, 5, f"Photo {i+1}: {item['caption'][:50]}", align='C')
@@ -190,10 +178,11 @@ with st.form("main_form"):
     with c1:
         completed_by = st.text_input("Completed By")
         customer = st.text_input("Customer", value="PT. Finpac Anugerah Indonesia")
-        machine = st.text_input("Machine")
+        # Tukar posisi: Meet With sekarang di atas Machine
+        meet_with = st.text_input("Meet With")
     with c2:
         report_date = st.date_input("Date", value=date.today())
-        meet_with = st.text_input("Meet With")
+        machine = st.text_input("Machine")
         sc1, sc2 = st.columns(2)
         with sc1: m_type = st.text_input("Type")
         with sc2: serial_no = st.text_input("Serial No")
