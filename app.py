@@ -26,8 +26,8 @@ class PDF(FPDF):
             self.line(10, self.get_y(), 200, self.get_y())
             self.ln(5)
 
-# 2. FUNGSI PEMBUATAN PDF (LOGIKA MULTI-PHOTO)
-def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
+# 2. FUNGSI PEMBUATAN PDF (DENGAN ADJUS UKURAN FOTO)
+def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None, img_width_adj=100):
     pdf = PDF(logo_img=logo)
     pdf.add_page()
     pdf.set_font("Arial", size=10)
@@ -55,25 +55,26 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
     pdf.set_font("Arial", size=10)
     pdf.multi_cell(0, 8, data['Follow Up'], border=1)
 
-    # --- LOGIKA LAMPIRAN BANYAK FOTO ---
+    # --- LOGIKA LAMPIRAN DENGAN UKURAN ADJUSTABLE ---
     if extra_items:
         pdf.ln(5)
         for i, item in enumerate(extra_items):
-            # Cek jika ruang hampir habis, pindah halaman
-            if pdf.get_y() > 220:
+            # Hitung proporsi berdasarkan lebar yang di-adjust
+            w_orig, h_orig = item.size
+            img_w = img_width_adj 
+            img_h = (h_orig / w_orig) * img_w
+            
+            # Cek jika sisa halaman tidak cukup untuk foto + judul
+            if pdf.get_y() + img_h > 250:
                 pdf.add_page()
             
             pdf.set_font("Arial", 'B', 9)
             pdf.cell(0, 7, f"Attachment {i+1}:", ln=1)
             
-            # Hitung proporsi
-            w_orig, h_orig = item.size
-            img_w = 110 # Lebar standar agar rapi
-            img_h = (h_orig / w_orig) * img_w
-            
-            # Masukkan Gambar
-            pdf.image(item, x=15, y=pdf.get_y(), w=img_w)
-            pdf.set_y(pdf.get_y() + img_h + 5) # Beri jarak antar foto
+            # Masukkan Gambar (posisi tengah otomatis)
+            x_pos = (210 - img_w) / 2
+            pdf.image(item, x=x_pos, y=pdf.get_y(), w=img_w)
+            pdf.set_y(pdf.get_y() + img_h + 8) 
 
     # Tanda Tangan
     if pdf.get_y() > 240: pdf.add_page()
@@ -96,13 +97,15 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
 st.set_page_config(page_title="Service Report", layout="centered")
 st.title("Digital Service Report")
 
-# Sidebar untuk Logo dan Upload Foto Sekaligus
-st.sidebar.header("Media")
+# Sidebar
+st.sidebar.header("Media & Settings")
 uploaded_logo = st.sidebar.file_uploader("Upload Logo", type=["png", "jpg"])
 st.sidebar.divider()
 st.sidebar.subheader("Foto Lampiran")
-# Fitur upload banyak file sekaligus
-uploaded_photos = st.sidebar.file_uploader("Pilih Foto (Bisa lebih dari 2)", type=["png", "jpg", "jpeg"], accept_multiple_files=True)
+uploaded_photos = st.sidebar.file_uploader("Pilih Foto", type=["png", "jpg", "jpeg"], accept_multiple_files=True)
+
+# Slider untuk Adjust Ukuran Foto di PDF
+img_adj = st.sidebar.slider("Adjust Lebar Foto (mm)", 30, 180, 100)
 
 with st.form("main_form"):
     c1, c2 = st.columns(2)
@@ -134,10 +137,8 @@ with st.form("main_form"):
 if submitted:
     if not completed_by: st.error("Isi Nama Teknisi!")
     else:
-        # Proses foto
         logo_img = Image.open(uploaded_logo) if uploaded_logo else None
         list_photos = [Image.open(p) for p in uploaded_photos] if uploaded_photos else []
-        
         img_t = Image.fromarray(c_tech.image_data.astype('uint8'), 'RGBA') if c_tech.image_data is not None else None
         img_c = Image.fromarray(c_cust.image_data.astype('uint8'), 'RGBA') if c_cust.image_data is not None else None
         
@@ -149,9 +150,9 @@ if submitted:
         
         st.session_state.update({
             'last_data': report_data, 'sig_t': img_t, 'sig_c': img_c, 
-            'logo': logo_img, 'extra_items': list_photos
+            'logo': logo_img, 'extra_items': list_photos, 'img_adj': img_adj
         })
-        st.success("Tersimpan!")
+        st.success("Data tersimpan!")
 
 # TAMPILAN PREVIEW PDF
 if 'last_data' in st.session_state:
@@ -163,7 +164,8 @@ if 'last_data' in st.session_state:
         st.session_state['sig_t'], 
         st.session_state['sig_c'], 
         logo=st.session_state.get('logo'), 
-        extra_items=st.session_state.get('extra_items')
+        extra_items=st.session_state.get('extra_items'),
+        img_width_adj=st.session_state.get('img_adj', 100)
     )
 
     base64_pdf = base64.b64encode(pdf_bytes).decode('utf-8')
