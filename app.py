@@ -8,9 +8,23 @@ from PIL import Image
 import io
 import base64
 
-# --- KONFIGURASI ---
+# --- 1. KONFIGURASI & PEMBERSIHAN TEKS ---
 EXCEL_FILE = "service_reports.xlsx"
 
+def clean_text(text):
+    """Mencegah FPDF Unicode Error dengan membersihkan karakter khusus"""
+    if not text:
+        return ""
+    # Mengganti karakter umum yang sering menyebabkan error
+    replacements = {
+        '\u2013': '-', '\u2014': '-', '\u2018': "'", '\u2019': "'",
+        '\u201c': '"', '\u201d': '"', '\u2022': '*', '\xb0': ' deg '
+    }
+    for search, replace in replacements.items():
+        text = text.replace(search, replace)
+    return text.encode('latin-1', 'ignore').decode('latin-1')
+
+# --- 2. CLASS PDF DENGAN KOP CENTER ---
 class PDF(FPDF):
     def __init__(self, logo_img=None):
         super().__init__()
@@ -19,15 +33,16 @@ class PDF(FPDF):
 
     def header(self):
         if self.page_no() == 1:
+            # Penempatan Logo di Tengah (CENTER)
             if self.logo_img:
-                # Perhitungan center presisi
                 w_orig, h_orig = self.logo_img.size
                 logo_h = 22 
                 logo_w = (w_orig / h_orig) * logo_h
-                x_pos = (210 - logo_w) / 2
-                self.image(self.logo_img, x=x_pos, y=8, h=logo_h)
+                x_centered = (210 - logo_w) / 2
+                self.image(self.logo_img, x=x_centered, y=8, h=logo_h)
                 self.ln(logo_h + 2)
 
+            # Banner Biru Judul Laporan
             self.set_fill_color(41, 128, 185) 
             self.set_text_color(255, 255, 255)
             self.set_font('helvetica', 'B', 14)
@@ -35,50 +50,52 @@ class PDF(FPDF):
             self.set_text_color(0, 0, 0)
             self.ln(3)
 
-def optimize_image(uploaded_file, max_res=(600, 600)): # Resolusi diperkecil agar tidak blank
+# --- 3. OPTIMASI GAMBAR ---
+def optimize_image(uploaded_file, max_res=(600, 600)):
     if uploaded_file is None: return None
     img = Image.open(uploaded_file)
     if img.mode in ("RGBA", "P"): img = img.convert("RGB")
     img.thumbnail(max_res, Image.Resampling.LANCZOS)
     return img
 
+# --- 4. FUNGSI UTAMA PEMBUATAN PDF ---
 def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
     pdf = PDF(logo_img=logo)
     pdf.add_page()
     
-    # --- INFO BOX ---
+    # --- INFO BOX (Grid Data Teknis) ---
     pdf.set_font("helvetica", 'B', 8)
     pdf.set_fill_color(240, 240, 240)
     h_row = 7
     
-    # Baris data teknis
+    # Gunakan clean_text untuk mencegah crash
+    fields = [
+        ("Technician", clean_text(data.get('Completed By', ''))),
+        ("Customer", clean_text(data.get('Customer', ''))),
+        ("Meet With", clean_text(data.get('Meet With', ''))),
+        ("Date", clean_text(data.get('Date', ''))),
+        ("Machine", clean_text(data.get('Machine', ''))),
+        ("Type", clean_text(data.get('Type', ''))),
+        ("Serial No", clean_text(data.get('Serial No', '')))
+    ]
+
+    # Layout baris demi baris (Telah dioptimalkan agar rapat)
     pdf.cell(30, h_row, " Technician", border=1, fill=True)
-    pdf.set_font("helvetica", '', 8)
-    pdf.cell(65, h_row, f" {data.get('Completed By', '')}", border=1)
-    pdf.set_font("helvetica", 'B', 8)
-    pdf.cell(30, h_row, " Customer", border=1, fill=True)
-    pdf.set_font("helvetica", '', 8)
-    pdf.cell(65, h_row, f" {data.get('Customer', '')}", border=1, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    pdf.set_font("helvetica", '', 8); pdf.cell(65, h_row, f" {fields[0][1]}", border=1)
+    pdf.set_font("helvetica", 'B', 8); pdf.cell(30, h_row, " Customer", border=1, fill=True)
+    pdf.set_font("helvetica", '', 8); pdf.cell(65, h_row, f" {fields[1][1]}", border=1, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     
-    pdf.cell(30, h_row, " Meet With", border=1, fill=True)
-    pdf.set_font("helvetica", '', 8)
-    pdf.cell(65, h_row, f" {data.get('Meet With', '')}", border=1)
-    pdf.set_font("helvetica", 'B', 8)
-    pdf.cell(30, h_row, " Date", border=1, fill=True)
-    pdf.set_font("helvetica", '', 8)
-    pdf.cell(65, h_row, f" {data.get('Date', '')}", border=1, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    pdf.set_font("helvetica", 'B', 8); pdf.cell(30, h_row, " Meet With", border=1, fill=True)
+    pdf.set_font("helvetica", '', 8); pdf.cell(65, h_row, f" {fields[2][1]}", border=1)
+    pdf.set_font("helvetica", 'B', 8); pdf.cell(30, h_row, " Date", border=1, fill=True)
+    pdf.set_font("helvetica", '', 8); pdf.cell(65, h_row, f" {fields[3][1]}", border=1, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     
-    pdf.cell(30, h_row, " Machine", border=1, fill=True)
-    pdf.set_font("helvetica", '', 8)
-    pdf.cell(65, h_row, f" {data.get('Machine', '')}", border=1)
-    pdf.set_font("helvetica", 'B', 8)
-    pdf.cell(15, h_row, " Type", border=1, fill=True)
-    pdf.set_font("helvetica", '', 8)
-    pdf.cell(30, h_row, f" {data.get('Type', '')}", border=1)
-    pdf.set_font("helvetica", 'B', 8)
-    pdf.cell(20, h_row, " Ser No", border=1, fill=True)
-    pdf.set_font("helvetica", '', 8)
-    pdf.cell(30, h_row, f" {data.get('Serial No', '')}", border=1, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    pdf.set_font("helvetica", 'B', 8); pdf.cell(30, h_row, " Machine", border=1, fill=True)
+    pdf.set_font("helvetica", '', 8); pdf.cell(65, h_row, f" {fields[4][1]}", border=1)
+    pdf.set_font("helvetica", 'B', 8); pdf.cell(15, h_row, " Type", border=1, fill=True)
+    pdf.set_font("helvetica", '', 8); pdf.cell(30, h_row, f" {fields[5][1]}", border=1)
+    pdf.set_font("helvetica", 'B', 8); pdf.cell(20, h_row, " Ser No", border=1, fill=True)
+    pdf.set_font("helvetica", '', 8); pdf.cell(30, h_row, f" {fields[6][1]}", border=1, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     
     pdf.ln(4)
     
@@ -88,38 +105,39 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
     pdf.cell(0, 7, "PROBLEM DESCRIPTION", border='B', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.ln(1)
     pdf.set_font("helvetica", '', 9)
-    pdf.multi_cell(0, 5, data.get('Problem', ''), border=0)
+    pdf.multi_cell(0, 5, clean_text(data.get('Problem', '')), border=0)
     pdf.ln(3)
     
     pdf.set_font("helvetica", 'B', 10)
     pdf.cell(0, 7, "REPORT / FOLLOW UP ACTION", border='B', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.ln(1)
     pdf.set_font("helvetica", '', 9)
-    pdf.multi_cell(0, 5, data.get('Follow Up', ''), border=0)
+    pdf.multi_cell(0, 5, clean_text(data.get('Follow Up', '')), border=0)
     pdf.ln(5)
 
-    # --- LAMPIRAN FOTO ---
+    # --- LAMPIRAN FOTO (GRID 2x2) ---
     if extra_items:
         pdf.add_page()
         pdf.set_font("helvetica", 'B', 12)
         pdf.cell(0, 10, "DOCUMENTATION PHOTOS", align='C', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         pdf.ln(5)
-        cw, rh, gap = 90, 75, 10
+        cw, rh, gap = 90, 70, 10
         for i, item in enumerate(extra_items):
             if i > 0 and i % 4 == 0: pdf.add_page()
-            col, row = i % 2, (i // 2) % 2
-            x, y = 10 + (col * (cw + gap)), pdf.get_y() if row == 0 else pdf.get_y() - rh - 15 + (row * (rh + 15))
-            # Penyesuaian Y dinamis untuk grid
-            y_fixed = 30 + (row * (rh + 15))
+            col = i % 2
+            row = (i // 2) % 2
+            x_pos = 10 + (col * (cw + gap))
+            y_pos = 30 + (row * (rh + 15))
+            
             pdf.set_draw_color(200, 200, 200)
-            pdf.rect(x, y_fixed, cw, rh)
-            pdf.image(item['img'], x=x+2, y=y_fixed+2, w=cw-4, h=rh-10)
-            pdf.set_xy(x, y_fixed + rh - 6)
+            pdf.rect(x_pos, y_pos, cw, rh)
+            pdf.image(item['img'], x=x_pos+2, y=y_pos+2, w=cw-4, h=rh-10)
+            pdf.set_xy(x_pos, y_pos + rh - 6)
             pdf.set_font("helvetica", 'I', 7)
-            pdf.cell(cw, 5, f"Photo {i+1}: {item['caption'][:50]}", align='C')
+            pdf.cell(cw, 5, f"Photo {i+1}: {clean_text(item['caption'][:50])}", align='C')
         pdf.ln(20)
 
-    # --- TANDA TANGAN DI HALAMAN TERAKHIR ---
+    # --- TANDA TANGAN (SELALU DI HALAMAN TERAKHIR) ---
     if pdf.get_y() > 230: pdf.add_page()
     pdf.ln(10)
     pdf.set_font("helvetica", 'B', 9)
@@ -132,12 +150,12 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
     
     pdf.ln(20)
     pdf.set_font("helvetica", 'BU', 9)
-    pdf.cell(95, 7, f"{data.get('Completed By', '')}", align='C')
-    pdf.cell(95, 7, f"{data.get('Meet With', '')}", align='C')
+    pdf.cell(95, 7, f"{fields[0][1]}", align='C')
+    pdf.cell(95, 7, f"{fields[2][1]}", align='C')
 
     return bytes(pdf.output())
 
-# --- UI STREAMLIT ---
+# --- 5. UI STREAMLIT ---
 st.set_page_config(page_title="Finpac Service Report", layout="centered")
 
 if st.sidebar.button("🔄 Reset Aplikasi"):
@@ -176,18 +194,18 @@ with st.form("main_form"):
     st.divider()
     cs1, cs2 = st.columns(2)
     with cs1:
-        st.write("Tanda Tangan Teknisi:")
+        st.write("Teknisi:")
         c_tech = st_canvas(stroke_width=2, stroke_color="#000", background_color="rgba(0,0,0,0)", height=100, width=200, key="c_t")
     with cs2:
-        st.write("Tanda Tangan Customer:")
+        st.write("Customer:")
         c_cust = st_canvas(stroke_width=2, stroke_color="#000", background_color="rgba(0,0,0,0)", height=100, width=200, key="c_c")
 
-    submitted = st.form_submit_button("Generate & Preview")
+    submitted = st.form_submit_button("Generate & Preview Report")
 
 if submitted:
     if not completed_by: st.error("Isi Nama Teknisi!")
     else:
-        # Proses Data
+        # Proses optimasi
         final_list = [{'img': optimize_image(i['file']), 'caption': i['caption']} for i in photo_data]
         logo_img = Image.open(uploaded_logo) if uploaded_logo else None
         sig_t_img = Image.fromarray(c_tech.image_data.astype('uint8'), 'RGBA') if c_tech.image_data is not None else None
@@ -200,17 +218,13 @@ if submitted:
         }
         
         st.session_state.update({'last_data': report_data, 'sig_t': sig_t_img, 'sig_c': sig_c_img, 'logo': logo_img, 'extra_items': final_list})
-        st.success("Laporan Berhasil Dibuat!")
+        st.success("Laporan Berhasil Disimpan!")
 
 if 'last_data' in st.session_state:
     st.write("---")
     pdf_bytes = create_pdf(st.session_state['last_data'], st.session_state['sig_t'], st.session_state['sig_c'], logo=st.session_state.get('logo'), extra_items=st.session_state.get('extra_items'))
+    st.download_button("⬇️ Download PDF Report", data=pdf_bytes, file_name=f"Report_{st.session_state['last_data']['Serial No']}.pdf")
     
-    st.download_button("⬇️ Download PDF", data=pdf_bytes, file_name=f"Report_{st.session_state['last_data']['Serial No']}.pdf")
-    
-    # Backup Preview: Jika embed gagal, user tetap bisa download
-    try:
-        base64_pdf = base64.b64encode(pdf_bytes).decode('utf-8')
-        st.markdown(f'<embed src="data:application/pdf;base64,{base64_pdf}" width="100%" height="600" type="application/pdf">', unsafe_allow_html=True)
-    except:
-        st.info("Gunakan tombol download di atas untuk melihat PDF.")
+    # Preview dengan tag <embed> yang lebih stabil untuk Chrome
+    base64_pdf = base64.b64encode(pdf_bytes).decode('utf-8')
+    st.markdown(f'<embed src="data:application/pdf;base64,{base64_pdf}" width="100%" height="800" type="application/pdf">', unsafe_allow_html=True)
