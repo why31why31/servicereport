@@ -74,7 +74,7 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
     
     pdf.ln(4)
     
-    # --- CONTENT ---
+    # --- REPORT CONTENT ---
     pdf.set_draw_color(41, 128, 185)
     pdf.set_font("helvetica", 'B', 10)
     pdf.cell(0, 7, "PROBLEM DESCRIPTION", border='B', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
@@ -90,47 +90,50 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
     pdf.multi_cell(0, 5, d.get('Follow Up'), border=0)
     pdf.ln(5)
 
-    # --- ATTACHMENTS (CENTERED GRID) ---
+    # --- CENTERED IMAGE GRID (2x2) ---
     if extra_items:
-        # Cek jika sisa ruang sangat sedikit, pindah halaman dulu
-        if pdf.get_y() > 240: pdf.add_page()
+        # Check space: if less than photo height, move to new page
+        if pdf.get_y() > 220: pdf.add_page()
         
         pdf.set_font("helvetica", 'B', 10)
         pdf.cell(0, 7, "DOCUMENTATION PHOTOS", border='B', align='C', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         pdf.ln(4)
         
-        cw, rh = 85, 60 # Ukuran foto dioptimalkan agar center
+        cw, rh = 85, 60 # Photo size
         gap = 10
-        margin_left = (210 - (cw * 2 + gap)) / 2 # Hitung margin agar grid di tengah
+        margin_left = (210 - (cw * 2 + gap)) / 2 # Precise horizontal centering
+        
+        start_y = pdf.get_y()
         
         for i, item in enumerate(extra_items):
+            # Page handling for more than 4 photos
             if i > 0 and i % 4 == 0:
                 pdf.add_page()
-                pdf.ln(5)
+                start_y = pdf.get_y() + 10
             
             col = i % 2
-            x_pos = margin_left + (col * (cw + gap))
-            y_pos = pdf.get_y()
+            row = (i // 2) % 2
             
-            # Cek sisa ruang vertikal
-            if y_pos + rh > 275:
-                pdf.add_page()
-                y_pos = pdf.get_y() + 5
-
+            x_pos = margin_left + (col * (cw + gap))
+            y_pos = start_y + (row * (rh + 12))
+            
+            # Frame and Image
             pdf.set_draw_color(200, 200, 200)
             pdf.rect(x_pos, y_pos, cw, rh)
             pdf.image(item['img'], x=x_pos+1, y=y_pos+1, w=cw-2, h=rh-8)
             
+            # Caption
             pdf.set_xy(x_pos, y_pos + rh - 6)
             pdf.set_font("helvetica", 'I', 7)
             pdf.cell(cw, 5, f"Photo {i+1}: {clean_text(item['caption'][:40])}", align='C')
             
+            # Update Y after each row
             if col == 1 or i == len(extra_items)-1:
-                pdf.set_y(y_pos + rh + 5)
+                pdf.set_y(y_pos + rh + 8)
 
-    # --- SIGNATURES (ALWAYS ON LAST PAGE) ---
-    if pdf.get_y() > 230: pdf.add_page()
-    pdf.ln(10)
+    # --- SIGNATURES (ON LAST PAGE) ---
+    if pdf.get_y() > 240: pdf.add_page()
+    pdf.ln(5)
     pdf.set_font("helvetica", 'B', 9)
     pdf.cell(95, 7, "Service Technician,", align='C')
     pdf.cell(95, 7, "Customer / PIC,", align='C', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
@@ -187,7 +190,7 @@ with st.form("main_form"):
         c_tech = st_canvas(stroke_width=2, stroke_color="#000", background_color="rgba(0,0,0,0)", height=80, width=200, key="c_t")
     with cs2:
         st.write("Customer Signature:")
-        c_cust = st_canvas(stroke_width=2, stroke_color="#000", background_color="rgba(0,0,0,0)", height=100, width=200, key="c_c")
+        c_cust = st_canvas(stroke_width=2, stroke_color="#000", background_color="rgba(0,0,0,0)", height=80, width=200, key="c_c")
 
     submitted = st.form_submit_button("Generate & Preview")
 
