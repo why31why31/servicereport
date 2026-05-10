@@ -17,6 +17,7 @@ class PDF(FPDF):
         self.logo_img = logo_img
 
     def header(self):
+        # Kop surat hanya muncul di halaman 1 [cite: 1, 10]
         if self.page_no() == 1:
             if self.logo_img:
                 self.image(self.logo_img, x=10, y=8, w=30)
@@ -26,19 +27,35 @@ class PDF(FPDF):
             self.line(10, self.get_y(), 200, self.get_y())
             self.ln(5)
 
+# --- FUNGSI OPTIMASI GAMBAR (Mencegah Websocket Error > 200MB) ---
 def optimize_image(uploaded_file, max_res=(800, 800)):
     if uploaded_file is None: return None
     img = Image.open(uploaded_file)
     if img.mode in ("RGBA", "P"): img = img.convert("RGB")
+    # Perkecil resolusi agar preview lancar di browser [cite: 1]
     img.thumbnail(max_res, Image.Resampling.LANCZOS)
     return img
 
+def save_to_excel(new_data):
+    try:
+        if os.path.exists(EXCEL_FILE):
+            df = pd.read_excel(EXCEL_FILE)
+            df = pd.concat([df, pd.DataFrame([new_data])], ignore_index=True)
+        else:
+            df = pd.DataFrame([new_data])
+        df.to_excel(EXCEL_FILE, index=False)
+        return True
+    except Exception as e:
+        st.error(f"Gagal simpan Excel: {e}")
+        return False
+
+# --- FUNGSI BUAT PDF (Side-by-Side Logic Terpadu) ---
 def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None, img_width_adj=100):
     pdf = PDF(logo_img=logo)
     pdf.add_page()
     pdf.set_font("helvetica", size=10)
     
-    # Tabel Informasi Utama
+    # Tabel Informasi (Urutan: Completed By, Customer, Machine, Date, Meet With, Type, Serial No) [cite: 1, 5]
     pdf.cell(95, 10, f"Completed By: {data['Completed By']}", border=1)
     pdf.cell(95, 10, f"Customer: {data['Customer']}", border=1, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.cell(95, 10, f"Machine: {data['Machine']}", border=1)
@@ -59,7 +76,7 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None, img_wi
     pdf.set_font("helvetica", size=10)
     pdf.multi_cell(0, 8, data['Follow Up'], border=1)
 
-    # --- LOGIKA LAMPIRAN DENGAN KETERANGAN PER FOTO ---
+    # --- LAMPIRAN FOTO DENGAN KETERANGAN ---
     if extra_items:
         pdf.ln(5)
         for i, item in enumerate(extra_items):
@@ -75,13 +92,12 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None, img_wi
             x_pos = (210 - img_w) / 2
             pdf.image(item['img'], x=x_pos, y=pdf.get_y(), w=img_w)
             
-            # Tulis Keterangan di bawah foto
             pdf.set_y(pdf.get_y() + img_h + 2)
             pdf.set_font("helvetica", 'I', 8)
             pdf.multi_cell(0, 5, f"Keterangan: {item['caption']}", align='C')
             pdf.ln(5)
 
-    # Tanda Tangan
+    # Tanda Tangan [cite: 1, 20]
     if pdf.get_y() > 230: pdf.add_page()
     pdf.ln(5)
     pdf.set_font("helvetica", 'B', 10)
@@ -93,6 +109,7 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None, img_wi
     if sig_c: pdf.image(sig_c, x=138, y=sig_y, w=25)
     
     pdf.ln(25)
+    pdf.set_font("helvetica", '', 10)
     pdf.cell(95, 10, f"( {data['Completed By']} )", align='C')
     pdf.cell(95, 10, f"( {data['Meet With']} )", align='C', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
 
@@ -104,18 +121,15 @@ st.title("Digital Service Report")
 
 st.sidebar.header("Media & Settings")
 uploaded_logo = st.sidebar.file_uploader("Upload Logo", type=["png", "jpg", "jpeg"])
-st.sidebar.divider()
+uploaded_photos = st.sidebar.file_uploader("Pilih Foto Dokumentasi", type=["png", "jpg", "jpeg"], accept_multiple_files=True)
 
-# Input foto secara dinamis
-st.sidebar.subheader("Foto Lampiran")
-uploaded_photos = st.sidebar.file_uploader("Pilih Foto", type=["png", "jpg", "jpeg"], accept_multiple_files=True)
-
-# Sediakan input keterangan untuk setiap foto yang diupload
-photo_list = []
+# Input Keterangan Foto Dinamis [cite: 1, 11, 15]
+photo_data = []
 if uploaded_photos:
+    st.sidebar.subheader("Keterangan Lampiran")
     for i, p in enumerate(uploaded_photos):
-        cap = st.sidebar.text_input(f"Keterangan Foto {i+1}", key=f"cap_{i}")
-        photo_list.append({'file': p, 'caption': cap})
+        cap = st.sidebar.text_input(f"Ket Foto {i+1}", key=f"cap_{i}")
+        photo_data.append({'file': p, 'caption': cap})
 
 img_adj = st.sidebar.slider("Lebar Foto di PDF (mm)", 30, 180, 100)
 
@@ -147,13 +161,14 @@ with st.form("main_form"):
     submitted = st.form_submit_button("Simpan & Lihat Preview")
 
 if submitted:
-    if not completed_by: st.error("Isi Nama Teknisi!")
+    if not completed_by:
+        st.error("Nama Teknisi wajib diisi!")
     else:
-        # Optimasi dan Gabungkan Foto dengan Keterangan
-        final_photos = []
-        for p_item in photo_list:
-            opt_img = optimize_image(p_item['file'], (800, 800))
-            final_photos.append({'img': opt_img, 'caption': p_item['caption']})
+        # Optimasi Gambar & Caption
+        final_list = []
+        for item in photo_data:
+            opt_img = optimize_image(item['file'], (800, 800))
+            final_list.append({'img': opt_img, 'caption': item['caption']})
             
         logo_img = optimize_image(uploaded_logo, (300, 300))
         sig_t_img = Image.fromarray(c_tech.image_data.astype('uint8'), 'RGBA') if c_tech.image_data is not None else None
@@ -165,17 +180,36 @@ if submitted:
             "Serial No": serial_no, "Problem": problem, "Follow Up": follow_up
         }
         
-        st.session_state.update({
-            'last_data': report_data, 'sig_t': sig_t_img, 'sig_c': sig_c_img, 
-            'logo': logo_img, 'extra_items': final_photos, 'img_adj': img_adj
-        })
-        st.success("Data Berhasil Disimpan!")
+        if save_to_excel(report_data):
+            st.session_state.update({
+                'last_data': report_data, 'sig_t': sig_t_img, 'sig_c': sig_c_img, 
+                'logo': logo_img, 'extra_items': final_list, 'img_adj': img_adj
+            })
+            st.success("Laporan Berhasil Disimpan!")
 
+# --- LIVE PREVIEW (FIXED FOR CHROME) ---
 if 'last_data' in st.session_state:
     st.write("---")
-    st.subheader("🔍 PDF Live Preview")
-    pdf_bytes = create_pdf(st.session_state['last_data'], st.session_state['sig_t'], st.session_state['sig_c'], logo=st.session_state.get('logo'), extra_items=st.session_state.get('extra_items'), img_width_adj=st.session_state.get('img_adj', 100))
+    st.subheader("🔍 PDF Preview")
+    
+    pdf_bytes = create_pdf(
+        st.session_state['last_data'], 
+        st.session_state['sig_t'], 
+        st.session_state['sig_c'], 
+        logo=st.session_state.get('logo'), 
+        extra_items=st.session_state.get('extra_items'),
+        img_width_adj=st.session_state.get('img_adj', 100)
+    )
+
     base64_pdf = base64.b64encode(pdf_bytes).decode('utf-8')
-    pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="800" type="application/pdf"></iframe>'
+    # Menggunakan tag <embed> untuk menghindari blokir Chrome pada <iframe> [cite: 1]
+    pdf_display = f'<embed src="data:application/pdf;base64,{base64_pdf}" width="100%" height="800" type="application/pdf">'
+    
     st.markdown(pdf_display, unsafe_allow_html=True)
-    st.download_button("⬇️ Download PDF", data=pdf_bytes, file_name=f"Report_{st.session_state['last_data']['Serial No']}.pdf", mime="application/pdf")
+    
+    st.download_button(
+        label="⬇️ Download PDF Service Report",
+        data=pdf_bytes,
+        file_name=f"Report_{st.session_state['last_data']['Serial No']}.pdf",
+        mime="application/pdf"
+    )
