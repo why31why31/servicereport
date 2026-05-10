@@ -1,5 +1,5 @@
 import streamlit as st
-import pd
+import pandas as pd
 from datetime import date
 from fpdf import FPDF
 import os
@@ -8,7 +8,7 @@ from PIL import Image
 import io
 import base64
 
-# 1. KONFIGURASI
+# --- KONFIGURASI FILE ---
 EXCEL_FILE = "service_reports.xlsx"
 
 class PDF(FPDF):
@@ -19,6 +19,7 @@ class PDF(FPDF):
     def header(self):
         if self.page_no() == 1:
             if self.logo_img:
+                # Pastikan logo proporsional
                 self.image(self.logo_img, x=10, y=8, w=30)
             self.set_font('Arial', 'B', 14)
             self.cell(0, 10, 'SERVICE REPORT', 0, 1, 'R')
@@ -26,24 +27,37 @@ class PDF(FPDF):
             self.line(10, self.get_y(), 200, self.get_y())
             self.ln(5)
 
-# 2. FUNGSI OPTIMASI GAMBAR (AUTO CONVERT/RESIZE)
-def optimize_image(uploaded_file, max_size=(800, 800)):
-    """Mengecilkan resolusi gambar agar PDF ringan tanpa merusak kualitas cetak"""
+# --- FUNGSI OPTIMASI GAMBAR (AUTO RESIZE) ---
+def optimize_image(uploaded_file, max_size=(1000, 1000)):
+    if uploaded_file is None:
+        return None
     img = Image.open(uploaded_file)
-    # Konversi ke RGB jika formatnya RGBA (untuk menghindari error PDF)
     if img.mode in ("RGBA", "P"):
         img = img.convert("RGB")
-    # Resize otomatis jika gambar terlalu besar (misal 4000px jadi 800px)
     img.thumbnail(max_size, Image.LANCZOS)
     return img
 
-# 3. FUNGSI PEMBUATAN PDF
+# --- FUNGSI SIMPAN EXCEL ---
+def save_to_excel(new_data):
+    try:
+        if os.path.exists(EXCEL_FILE):
+            df = pd.read_excel(EXCEL_FILE)
+            df = pd.concat([df, pd.DataFrame([new_data])], ignore_index=True)
+        else:
+            df = pd.DataFrame([new_data])
+        df.to_excel(EXCEL_FILE, index=False)
+        return True
+    except Exception as e:
+        st.error(f"Gagal akses Excel: {e}")
+        return False
+
+# --- FUNGSI BUAT PDF ---
 def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None, img_width_adj=100):
     pdf = PDF(logo_img=logo)
     pdf.add_page()
     pdf.set_font("Arial", size=10)
     
-    # Tabel Informasi Utama
+    # Tabel Informasi
     pdf.cell(95, 10, f"Completed By: {data['Completed By']}", border=1)
     pdf.cell(95, 10, f"Customer: {data['Customer']}", border=1, ln=1)
     pdf.cell(95, 10, f"Machine: {data['Machine']}", border=1)
@@ -64,7 +78,7 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None, img_wi
     pdf.set_font("Arial", size=10)
     pdf.multi_cell(0, 8, data['Follow Up'], border=1)
 
-    # --- LOGIKA LAMPIRAN ---
+    # Lampiran Foto
     if extra_items:
         pdf.ln(5)
         for i, item in enumerate(extra_items):
@@ -85,6 +99,7 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None, img_wi
     # Tanda Tangan
     if pdf.get_y() > 240: pdf.add_page()
     pdf.ln(5)
+    pdf.set_font("Arial", 'B', 10)
     pdf.cell(95, 10, "Technician,", align='C')
     pdf.cell(95, 10, "Customer,", ln=1, align='C')
     
@@ -98,28 +113,27 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None, img_wi
 
     return bytes(pdf.output())
 
-# 4. INTERFACE STREAMLIT
-st.set_page_config(page_title="Service Report", layout="centered")
+# --- INTERFACE STREAMLIT ---
+st.set_page_config(page_title="Finpac Service Report", layout="centered")
 st.title("Digital Service Report")
 
+# Sidebar
 st.sidebar.header("Media & Settings")
-uploaded_logo = st.sidebar.file_uploader("Upload Logo", type=["png", "jpg"])
+uploaded_logo = st.sidebar.file_uploader("Upload Logo Perusahaan", type=["png", "jpg", "jpeg"])
 st.sidebar.divider()
 st.sidebar.subheader("Foto Lampiran")
-uploaded_photos = st.sidebar.file_uploader("Upload Foto (Auto-Resize Aktif)", type=["png", "jpg", "jpeg"], accept_multiple_files=True)
-
-# Slider Adjust tetap ada untuk mengatur lebar tampilan di kertas PDF
-img_adj = st.sidebar.slider("Lebar Tampilan Foto di PDF (mm)", 30, 180, 100)
+uploaded_photos = st.sidebar.file_uploader("Pilih Foto Dokumentasi", type=["png", "jpg", "jpeg"], accept_multiple_files=True)
+img_adj = st.sidebar.slider("Lebar Foto di PDF (mm)", 30, 180, 100)
 
 with st.form("main_form"):
     c1, c2 = st.columns(2)
     with c1:
-        completed_by = st.text_input("Completed By")
+        completed_by = st.text_input("Completed By (Teknisi)")
         customer = st.text_input("Customer", value="PT. Finpac Anugerah Indonesia")
-        machine = st.text_input("Machine")
+        machine = st.text_input("Machine Name")
     with c2:
         report_date = st.date_input("Date", value=date.today())
-        meet_with = st.text_input("Meet With")
+        meet_with = st.text_input("Meet With (PIC)")
         sc1, sc2 = st.columns(2)
         with sc1: m_type = st.text_input("Type")
         with sc2: serial_no = st.text_input("Serial No")
@@ -130,10 +144,10 @@ with st.form("main_form"):
     st.divider()
     cs1, cs2 = st.columns(2)
     with cs1:
-        st.write("Teknisi:")
+        st.write("Tanda Tangan Teknisi:")
         c_tech = st_canvas(stroke_width=2, stroke_color="#000", background_color="rgba(0,0,0,0)", height=120, width=250, key="c_t")
     with cs2:
-        st.write("Customer:")
+        st.write("Tanda Tangan Customer:")
         c_cust = st_canvas(stroke_width=2, stroke_color="#000", background_color="rgba(0,0,0,0)", height=120, width=250, key="c_c")
 
     submitted = st.form_submit_button("Simpan & Lihat Preview")
@@ -141,12 +155,12 @@ with st.form("main_form"):
 if submitted:
     if not completed_by: st.error("Isi Nama Teknisi!")
     else:
-        # LOGIKA OTOMATIS: Mengecilkan file yang besar sebelum masuk PDF
-        logo_img = optimize_image(uploaded_logo, (400, 400)) if uploaded_logo else None
+        logo_img = optimize_image(uploaded_logo, (400, 400))
         list_photos = [optimize_image(p, (1000, 1000)) for p in uploaded_photos] if uploaded_photos else []
         
-        img_t = Image.fromarray(c_tech.image_data.astype('uint8'), 'RGBA') if c_tech.image_data is not None else None
-        img_c = Image.fromarray(c_cust.image_data.astype('uint8'), 'RGBA') if c_cust.image_data is not None else None
+        # Proses Tanda Tangan
+        sig_t_img = Image.fromarray(c_tech.image_data.astype('uint8'), 'RGBA') if c_tech.image_data is not None else None
+        sig_c_img = Image.fromarray(c_cust.image_data.astype('uint8'), 'RGBA') if c_cust.image_data is not None else None
         
         report_data = {
             "Completed By": completed_by, "Customer": customer, "Machine": machine,
@@ -154,13 +168,14 @@ if submitted:
             "Serial No": serial_no, "Problem": problem, "Follow Up": follow_up
         }
         
-        st.session_state.update({
-            'last_data': report_data, 'sig_t': img_t, 'sig_c': img_c, 
-            'logo': logo_img, 'extra_items': list_photos, 'img_adj': img_adj
-        })
-        st.success("Data Berhasil Dioptimalkan & Tersimpan!")
+        if save_to_excel(report_data):
+            st.session_state.update({
+                'last_data': report_data, 'sig_t': sig_t_img, 'sig_c': sig_c_img, 
+                'logo': logo_img, 'extra_items': list_photos, 'img_adj': img_adj
+            })
+            st.success("Data Berhasil Disimpan!")
 
-# PREVIEW
+# TAMPILAN PREVIEW PDF
 if 'last_data' in st.session_state:
     st.write("---")
     st.subheader("🔍 PDF Live Preview")
