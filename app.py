@@ -95,7 +95,7 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
         if pdf.get_y() > 210: pdf.add_page()
         
         pdf.set_font("helvetica", 'B', 10)
-        pdf.cell(0, 8, "DOCUMENTATION PHOTOS", border='B', align='C', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        pdf.cell(0, 8, "Attachments Pic", border='B', align='C', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         pdf.ln(3)
         
         cw, rh, gap = 85, 58, 10
@@ -143,7 +143,7 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
     pdf.set_xy(10, sig_y)
     pdf.cell(95, 7, "Service Technician,", align='C')
     pdf.set_xy(105, sig_y)
-    pdf.cell(95, 7, "Customer / PIC,", align='C')
+    pdf.cell(95, 7, "Customer,", align='C')
     
     img_y = sig_y + 8
     if sig_t: pdf.image(sig_t, x=45, y=img_y, w=25)
@@ -178,7 +178,7 @@ with st.form("main"):
     c1, c2 = st.columns(2)
     with c1:
         cb = st.text_input("Completed By")
-        cu = st.text_input("Customer", value="PT. Finpac Anugerah Indonesia")
+        cu = st.text_input("Customer")
         mw = st.text_input("Meet With")
     with c2:
         rd = st.date_input("Date", value=date.today())
