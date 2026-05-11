@@ -27,14 +27,13 @@ class PDF(FPDF):
     def __init__(self, logo_img=None):
         super().__init__()
         self.logo_img = logo_img
-        # Set margin awal
         self.set_margin(15)
 
     def header(self):
         if self.page_no() == 1:
             if self.logo_img:
                 w_orig, h_orig = self.logo_img.size
-                logo_h = 20
+                logo_h = 18
                 logo_w = (w_orig / h_orig) * logo_h
                 self.image(self.logo_img, x=(210 - logo_w) / 2, y=8, h=logo_h)
                 self.ln(logo_h + 2)
@@ -43,7 +42,7 @@ class PDF(FPDF):
             self.set_font('helvetica', 'B', 14)
             self.cell(0, 10, "SERVICE REPORT", fill=True, align='C', border=0, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
             self.set_text_color(0, 0, 0)
-            self.ln(3)
+            self.ln(2)
 
 # --- 3. GENERATION FUNCTION ---
 def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
@@ -62,17 +61,17 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
     pdf.set_font("helvetica", 'B', 8); pdf.cell(30, h_row, " Customer", border=1, fill=True)
     pdf.set_font("helvetica", '', 8); pdf.cell(65, h_row, f" {d.get('Customer')}", border=1, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     
-    pdf.set_font("helvetica", 'B', 8); pdf.cell(30, h_row, " Meet With", border=1, fill=True)
-    pdf.set_font("helvetica", '', 8); pdf.cell(65, h_row, f" {d.get('Meet With')}", border=1)
-    pdf.set_font("helvetica", 'B', 8); pdf.cell(30, h_row, " Date", border=1, fill=True)
-    pdf.set_font("helvetica", '', 8); pdf.cell(65, h_row, f" {d.get('Date')}", border=1, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    pdf.cell(30, h_row, " Meet With", border=1, fill=True)
+    pdf.cell(65, h_row, f" {d.get('Meet With')}", border=1)
+    pdf.cell(30, h_row, " Date", border=1, fill=True)
+    pdf.cell(65, h_row, f" {d.get('Date')}", border=1, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     
-    pdf.set_font("helvetica", 'B', 8); pdf.cell(30, h_row, " Machine", border=1, fill=True)
-    pdf.set_font("helvetica", '', 8); pdf.cell(65, h_row, f" {d.get('Machine')}", border=1)
-    pdf.set_font("helvetica", 'B', 8); pdf.cell(15, h_row, " Type", border=1, fill=True)
-    pdf.set_font("helvetica", '', 8); pdf.cell(30, h_row, f" {d.get('Type')}", border=1)
-    pdf.set_font("helvetica", 'B', 8); pdf.cell(20, h_row, " Ser No", border=1, fill=True)
-    pdf.set_font("helvetica", '', 8); pdf.cell(30, h_row, f" {d.get('Serial No')}", border=1, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    pdf.cell(30, h_row, " Machine", border=1, fill=True)
+    pdf.cell(65, h_row, f" {d.get('Machine')}", border=1)
+    pdf.cell(15, h_row, " Type", border=1, fill=True)
+    pdf.cell(30, h_row, f" {d.get('Type')}", border=1)
+    pdf.cell(20, h_row, " Ser No", border=1, fill=True)
+    pdf.cell(30, h_row, f" {d.get('Serial No')}", border=1, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     
     pdf.ln(4)
     pdf.set_draw_color(41, 128, 185)
@@ -88,52 +87,52 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
     pdf.cell(0, 7, "REPORT / FOLLOW UP ACTION", border='B', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.set_font("helvetica", '', 9)
     pdf.multi_cell(0, 5, d.get('Follow Up'), border=0)
-    pdf.ln(5)
+    pdf.ln(4)
 
-    # --- MANUAL GRID PHOTO (NO AUTO BREAK) ---
+    # --- CENTERED IMAGE GRID (SYNCED) ---
     if extra_items:
-        # Matikan auto break sementara untuk grid foto
-        pdf.set_auto_page_break(auto=False)
-        
-        if pdf.get_y() > 220: 
-            pdf.add_page()
+        # Jika sisa ruang tidak cukup untuk judul + 1 baris foto, pindah halaman
+        if pdf.get_y() > 210: pdf.add_page()
         
         pdf.set_font("helvetica", 'B', 10)
-        pdf.cell(0, 8, "DOCUMENTATION PHOTOS", border='B', align='C', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-        pdf.ln(4)
+        pdf.cell(0, 8, "Attachments", border='B', align='C', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        pdf.ln(3)
         
-        cw, rh, gap = 85, 60, 10
+        cw, rh, gap = 85, 58, 10
         margin_x = (210 - (cw * 2 + gap)) / 2
-        start_y = pdf.get_y()
         
+        start_y = pdf.get_y()
         for i, item in enumerate(extra_items):
-            # Cek manual: Jika i % 4 == 0 dan i > 0, buat halaman baru
+            # Page break setiap 4 foto
             if i > 0 and i % 4 == 0:
                 pdf.add_page()
-                start_y = 25 # Start Y baru di halaman baru
+                start_y = 25
             
             col = i % 2
             row = (i // 2) % 2
-            x_pos = margin_x + (col * (cw + gap))
-            y_pos = start_y + (row * (rh + 12))
+            x_p = margin_x + (col * (cw + gap))
+            y_p = start_y + (row * (rh + 10))
             
-            # Render Foto
+            # CEK SISA RUANG: Jika baris foto ini akan terpotong, pindah halaman
+            if y_p + rh > 275:
+                pdf.add_page()
+                start_y = 25
+                y_p = start_y
+                # Reset row karena kita baru mulai di halaman baru
+                # (Sederhananya foto ini menjadi foto pertama di halaman baru)
+            
             pdf.set_draw_color(200, 200, 200)
-            pdf.rect(x_pos, y_pos, cw, rh)
-            pdf.image(item['img'], x=x_pos+1, y=y_pos+1, w=cw-2, h=rh-8)
-            pdf.set_xy(x_pos, y_pos + rh - 6)
+            pdf.rect(x_p, y_p, cw, rh)
+            pdf.image(item['img'], x=x_p+1, y=y_p+1, w=cw-2, h=rh-8)
+            pdf.set_xy(x_p, y_p + rh - 5)
             pdf.set_font("helvetica", 'I', 7)
             pdf.cell(cw, 5, f"Photo {i+1}: {clean_text(item['caption'][:40])}", align='C')
             
-            # Simpan posisi Y paling akhir untuk tanda tangan
-            last_y = y_pos + rh + 10
-        
-        # Kembalikan posisi Y setelah grid selesai
-        pdf.set_y(last_y)
-        # Aktifkan kembali auto break
-        pdf.set_auto_page_break(auto=True, margin=15)
+            # Set posisi kursor terakhir setelah baris foto selesai
+            pdf.set_y(y_p + rh + 8)
 
     # --- SIGNATURES ---
+    # Tanda tangan butuh ruang sekitar 40mm
     if pdf.get_y() > 240: pdf.add_page()
     pdf.ln(5)
     pdf.set_font("helvetica", 'B', 9)
@@ -159,7 +158,6 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
 # --- 4. UI STREAMLIT ---
 st.set_page_config(page_title="Finpac Service Report", layout="centered")
 if st.sidebar.button("🔄 Reset App"):
-    st.cache_data.clear()
     st.session_state.clear()
     st.rerun()
 
@@ -176,7 +174,7 @@ with st.form("main"):
     c1, c2 = st.columns(2)
     with c1:
         cb = st.text_input("Completed By")
-        cu = st.text_input("Customer", value="PT. Finpac Anugerah Indonesia")
+        cu = st.text_input("Customer")
         mw = st.text_input("Meet With")
     with c2:
         rd = st.date_input("Date", value=date.today())
@@ -206,9 +204,6 @@ with st.form("main"):
 
 if 'd' in st.session_state:
     st.write("---")
-    # Nama variabel unik untuk menghindari browser cache
-    final_pdf_out = create_pdf(st.session_state['d'], st.session_state['st'], st.session_state['sc'], st.session_state['l'], st.session_state['p'])
-    st.download_button("⬇️ Download PDF", data=final_pdf_out, file_name=f"Report_{st.session_state['d']['Serial No']}.pdf")
-    
-    b64_pdf = base64.b64encode(final_pdf_out).decode()
-    st.markdown(f'<iframe src="data:application/pdf;base64,{b64_pdf}" width="100%" height="800"></iframe>', unsafe_allow_html=True)
+    pdf_out = create_pdf(st.session_state['d'], st.session_state['st'], st.session_state['sc'], st.session_state['l'], st.session_state['p'])
+    st.download_button("⬇️ Download PDF", data=pdf_out, file_name=f"Report_{st.session_state['d']['Serial No']}.pdf")
+    st.markdown(f'<iframe src="data:application/pdf;base64,{base64.b64encode(pdf_out).decode()}" width="100%" height="800"></iframe>', unsafe_allow_html=True)
