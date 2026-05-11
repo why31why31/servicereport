@@ -27,13 +27,14 @@ class PDF(FPDF):
     def __init__(self, logo_img=None):
         super().__init__()
         self.logo_img = logo_img
-        self.set_auto_page_break(auto=True, margin=15)
+        # Margin bawah dipersempit agar tanda tangan tidak mudah pindah halaman
+        self.set_auto_page_break(auto=True, margin=12)
 
     def header(self):
         if self.page_no() == 1:
             if self.logo_img:
                 w_orig, h_orig = self.logo_img.size
-                logo_h = 20
+                logo_h = 18
                 logo_w = (w_orig / h_orig) * logo_h
                 self.image(self.logo_img, x=(210 - logo_w) / 2, y=8, h=logo_h)
                 self.ln(logo_h + 2)
@@ -42,14 +43,14 @@ class PDF(FPDF):
             self.set_font('helvetica', 'B', 14)
             self.cell(0, 10, "SERVICE REPORT", fill=True, align='C', border=0, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
             self.set_text_color(0, 0, 0)
-            self.ln(3)
+            self.ln(2)
 
 # --- 3. GENERATION FUNCTION ---
 def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
     pdf = PDF(logo_img=logo)
     pdf.add_page()
     
-    # --- DATA GRID ---
+    # --- INFO GRID ---
     pdf.set_font("helvetica", 'B', 8)
     pdf.set_fill_color(240, 240, 240)
     h_row = 6.5
@@ -72,57 +73,64 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
     pdf.set_font("helvetica", 'B', 8); pdf.cell(20, h_row, " Ser No", border=1, fill=True)
     pdf.set_font("helvetica", '', 8); pdf.cell(30, h_row, f" {d.get('Serial No')}", border=1, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     
-    pdf.ln(4)
+    pdf.ln(3)
     pdf.set_draw_color(41, 128, 185)
     
     # --- DESCRIPTIONS ---
     pdf.set_font("helvetica", 'B', 10)
-    pdf.cell(0, 7, "PROBLEM DESCRIPTION", border='B', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    pdf.cell(0, 6, "PROBLEM DESCRIPTION", border='B', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.set_font("helvetica", '', 9)
     pdf.multi_cell(0, 5, d.get('Problem'), border=0)
     pdf.ln(2)
     
     pdf.set_font("helvetica", 'B', 10)
-    pdf.cell(0, 7, "REPORT / FOLLOW UP ACTION", border='B', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    pdf.cell(0, 6, "REPORT / FOLLOW UP ACTION", border='B', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.set_font("helvetica", '', 9)
     pdf.multi_cell(0, 5, d.get('Follow Up'), border=0)
-    pdf.ln(5)
+    pdf.ln(4)
 
-    # --- PHOTO GRID (Symmetric Alignment) ---
+    # --- CENTERED IMAGE GRID (FIXED ALIGNMENT) ---
     if extra_items:
         if pdf.get_y() > 220: pdf.add_page()
         
         pdf.set_font("helvetica", 'B', 10)
-        pdf.cell(0, 8, "DOCUMENTATION PHOTOS", border='B', align='C', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-        pdf.ln(4)
+        pdf.cell(0, 7, "DOCUMENTATION PHOTOS", border='B', align='C', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        pdf.ln(3)
         
-        cw, rh, gap = 85, 60, 10
+        cw, rh, gap = 85, 58, 10
         margin_x = (210 - (cw * 2 + gap)) / 2
-        start_y = pdf.get_y()
+        
+        # Titik Y awal untuk halaman saat ini
+        current_row_y = pdf.get_y()
         
         for i, item in enumerate(extra_items):
+            # Page break setiap 4 foto
             if i > 0 and i % 4 == 0:
                 pdf.add_page()
-                start_y = pdf.get_y() + 10
+                current_row_y = pdf.get_y() + 5
+            elif i > 0 and i % 2 == 0:
+                # Update koordinat Y hanya ketika pindah baris
+                current_row_y += rh + 10
             
             col = i % 2
-            row = (i // 2) % 2
-            x_pos = margin_x + (col * (cw + gap))
-            y_pos = start_y + (row * (rh + 12))
+            x_p = margin_x + (col * (cw + gap))
+            y_p = current_row_y
             
             pdf.set_draw_color(200, 200, 200)
-            pdf.rect(x_pos, y_pos, cw, rh)
-            pdf.image(item['img'], x=x_pos+1, y=y_pos+1, w=cw-2, h=rh-8)
-            pdf.set_xy(x_pos, y_pos + rh - 6)
+            pdf.rect(x_p, y_p, cw, rh)
+            pdf.image(item['img'], x=x_p+1, y=y_p+1, w=cw-2, h=rh-8)
+            
+            pdf.set_xy(x_p, y_p + rh - 6)
             pdf.set_font("helvetica", 'I', 7)
             pdf.cell(cw, 5, f"Photo {i+1}: {clean_text(item['caption'][:40])}", align='C')
             
-            # Kunci posisi Y agar baris berikutnya sejajar
-            pdf.set_y(y_pos + rh + 10)
+            # Update posisi kursor Y global PDF setelah baris selesai atau foto terakhir
+            pdf.set_y(current_row_y + rh + 8)
 
     # --- SIGNATURES ---
-    if pdf.get_y() > 240: pdf.add_page()
+    if pdf.get_y() > 250: pdf.add_page()
     pdf.ln(5)
+    
     pdf.set_font("helvetica", 'B', 9)
     sig_y = pdf.get_y()
     pdf.set_xy(10, sig_y)
@@ -143,9 +151,10 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
 
     return bytes(pdf.output())
 
-# --- 4. UI STREAMLIT ---
+# --- 4. UI ---
+# Gunakan variabel mw untuk Meet With agar tidak terjadi NameError
 st.set_page_config(page_title="Digital Service Report", layout="centered")
-if st.sidebar.button("🔄 Reset App"):
+if st.sidebar.button("🔄 Reset Application"):
     st.session_state.clear()
     st.rerun()
 
@@ -163,7 +172,7 @@ with st.form("main"):
     with c1:
         cb = st.text_input("Completed By")
         cu = st.text_input("Customer", value="PT. Finpac Anugerah Indonesia")
-        mw = st.text_input("Meet With") # Input disimpan di mw
+        mw = st.text_input("Meet With")
     with c2:
         rd = st.date_input("Date", value=date.today())
         ma = st.text_input("Machine")
@@ -178,21 +187,16 @@ with st.form("main"):
     with s2: 
         st.write("Customer:")
         cc = st_canvas(stroke_width=2, height=80, width=200, key="cc")
-
     if st.form_submit_button("Generate Report"):
-        if not cb: st.error("Name required")
+        if not cb: st.error("Technician name required")
         else:
             final_p = [{'img': optimize_image(p), 'caption': photo_caps[idx]} for idx, p in enumerate(uploaded_photos)]
-            # PERBAIKAN: Menggunakan mw sesuai definisi input di atas
-            st.session_state.update({
-                'd': {"Completed By": cb, "Customer": cu, "Meet With": mw, "Date": str(rd), "Machine": ma, "Type": ty, "Serial No": sn, "Problem": pr, "Follow Up": fu}, 
-                'st': Image.fromarray(ct.image_data.astype('uint8'), 'RGBA') if ct.image_data is not None else None,
-                'sc': Image.fromarray(cc.image_data.astype('uint8'), 'RGBA') if cc.image_data is not None else None,
-                'l': optimize_image(uploaded_logo), 'p': final_p
-            })
+            st.session_state.update({'d': {"Completed By": cb, "Customer": cu, "Meet With": mw, "Date": str(rd), "Machine": ma, "Type": ty, "Serial No": sn, "Problem": pr, "Follow Up": fu}, 
+                                     'st': Image.fromarray(ct.image_data.astype('uint8'), 'RGBA') if ct.image_data is not None else None,
+                                     'sc': Image.fromarray(cc.image_data.astype('uint8'), 'RGBA') if cc.image_data is not None else None,
+                                     'l': optimize_image(uploaded_logo), 'p': final_p})
 
 if 'd' in st.session_state:
     pdf_b = create_pdf(st.session_state['d'], st.session_state['st'], st.session_state['sc'], st.session_state['l'], st.session_state['p'])
     st.download_button("⬇️ Download PDF", data=pdf_b, file_name=f"Report_{st.session_state['d']['Serial No']}.pdf")
-    base64_pdf = base64.b64encode(pdf_b).decode()
     st.markdown(f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="800"></iframe>', unsafe_allow_html=True)
