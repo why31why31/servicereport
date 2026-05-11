@@ -89,50 +89,53 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
     pdf.multi_cell(0, 5, d.get('Follow Up'), border=0)
     pdf.ln(4)
 
-    # --- CENTERED IMAGE GRID (SYNCED) ---
+    # --- CENTERED IMAGE GRID (COORDINATE LOCK) ---
     if extra_items:
-        # Jika sisa ruang tidak cukup untuk judul + 1 baris foto, pindah halaman
+        # Jika sisa ruang sempit, pindah halaman sebelum judul foto
         if pdf.get_y() > 210: pdf.add_page()
         
         pdf.set_font("helvetica", 'B', 10)
-        pdf.cell(0, 8, "Attachments", border='B', align='C', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        pdf.cell(0, 8, "DOCUMENTATION PHOTOS", border='B', align='C', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         pdf.ln(3)
         
         cw, rh, gap = 85, 58, 10
         margin_x = (210 - (cw * 2 + gap)) / 2
         
-        start_y = pdf.get_y()
+        # Lock koordinat Y awal baris
+        row_y = pdf.get_y()
+        
         for i, item in enumerate(extra_items):
-            # Page break setiap 4 foto
+            # Halaman baru setiap 4 foto
             if i > 0 and i % 4 == 0:
                 pdf.add_page()
-                start_y = 25
+                row_y = 25
+            elif i > 0 and i % 2 == 0:
+                # Pindah ke baris baru: kunci Y baru
+                row_y += rh + 12
             
-            col = i % 2
-            row = (i // 2) % 2
-            x_p = margin_x + (col * (cw + gap))
-            y_p = start_y + (row * (rh + 10))
-            
-            # CEK SISA RUANG: Jika baris foto ini akan terpotong, pindah halaman
-            if y_p + rh > 275:
+            # Cek sisa ruang manual agar tidak terpotong
+            if row_y + rh > 280:
                 pdf.add_page()
-                start_y = 25
-                y_p = start_y
-                # Reset row karena kita baru mulai di halaman baru
-                # (Sederhananya foto ini menjadi foto pertama di halaman baru)
+                row_y = 25
+
+            col = i % 2
+            x_p = margin_x + (col * (cw + gap))
             
+            # Gambar frame & foto (Menggunakan row_y yang sama untuk satu baris)
             pdf.set_draw_color(200, 200, 200)
-            pdf.rect(x_p, y_p, cw, rh)
-            pdf.image(item['img'], x=x_p+1, y=y_p+1, w=cw-2, h=rh-8)
-            pdf.set_xy(x_p, y_p + rh - 5)
+            pdf.rect(x_p, row_y, cw, rh)
+            pdf.image(item['img'], x=x_p+1, y=row_y+1, w=cw-2, h=rh-8)
+            
+            # Caption di bawah foto
+            pdf.set_xy(x_p, row_y + rh - 5)
             pdf.set_font("helvetica", 'I', 7)
             pdf.cell(cw, 5, f"Photo {i+1}: {clean_text(item['caption'][:40])}", align='C')
             
-            # Set posisi kursor terakhir setelah baris foto selesai
-            pdf.set_y(y_p + rh + 8)
+            # Pastikan kursor utama PDF selalu berada di bawah elemen terakhir baris tersebut
+            pdf.set_y(row_y + rh + 8)
 
     # --- SIGNATURES ---
-    # Tanda tangan butuh ruang sekitar 40mm
+    # Tanda tangan dipaksa ke halaman baru jika sisa ruang < 4cm
     if pdf.get_y() > 240: pdf.add_page()
     pdf.ln(5)
     pdf.set_font("helvetica", 'B', 9)
@@ -155,9 +158,10 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
 
     return bytes(pdf.output())
 
-# --- 4. UI STREAMLIT ---
+# --- 4. UI ---
 st.set_page_config(page_title="Finpac Service Report", layout="centered")
-if st.sidebar.button("🔄 Reset App"):
+if st.sidebar.button("🔄 Clear App Cache"):
+    st.cache_data.clear()
     st.session_state.clear()
     st.rerun()
 
@@ -174,7 +178,7 @@ with st.form("main"):
     c1, c2 = st.columns(2)
     with c1:
         cb = st.text_input("Completed By")
-        cu = st.text_input("Customer")
+        cu = st.text_input("Customer", value="PT. Finpac Anugerah Indonesia")
         mw = st.text_input("Meet With")
     with c2:
         rd = st.date_input("Date", value=date.today())
@@ -204,6 +208,6 @@ with st.form("main"):
 
 if 'd' in st.session_state:
     st.write("---")
-    pdf_out = create_pdf(st.session_state['d'], st.session_state['st'], st.session_state['sc'], st.session_state['l'], st.session_state['p'])
-    st.download_button("⬇️ Download PDF", data=pdf_out, file_name=f"Report_{st.session_state['d']['Serial No']}.pdf")
-    st.markdown(f'<iframe src="data:application/pdf;base64,{base64.b64encode(pdf_out).decode()}" width="100%" height="800"></iframe>', unsafe_allow_html=True)
+    output_pdf = create_pdf(st.session_state['d'], st.session_state['st'], st.session_state['sc'], st.session_state['l'], st.session_state['p'])
+    st.download_button("⬇️ Download PDF", data=output_pdf, file_name=f"Report_{st.session_state['d']['Serial No']}.pdf")
+    st.markdown(f'<iframe src="data:application/pdf;base64,{base64.b64encode(output_pdf).decode()}" width="100%" height="800"></iframe>', unsafe_allow_html=True)
