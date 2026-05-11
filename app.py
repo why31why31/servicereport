@@ -54,42 +54,40 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
     
-    # --- DATA GRID (PRECISE ALIGNMENT & ULTRA-THIN UNDERLINE) ---
+    # --- DATA GRID (PRECISE ALIGNMENT) ---
     pdf.set_fill_color(240, 240, 240)
     h_row = 6.5
     d = {k: clean_text(str(v)) for k, v in data.items()}
 
     def draw_aligned_cell(label, value, w_label, w_value, is_last=False):
-        # 1. Label
+        # 1. Label & Titik Dua
         pdf.set_font("helvetica", 'B', 8)
         pdf.cell(w_label - 3, h_row, f" {label}", border=0, fill=True)
-        
-        # 2. Titik Dua (Sejajar)
         pdf.cell(3, h_row, ":", border=0, fill=True, align='C')
         
-        # 3. Value
+        # 2. Value dengan Garis Bawah Tipis
         x_start = pdf.get_x()
         y_start = pdf.get_y()
         pdf.set_font("helvetica", '', 8)
         pdf.cell(w_value, h_row, f" {value}", border=0)
         
-        # Garis bawah ultra tipis (0.05mm) sejajar di ujung kanan
+        # Garis bawah ultra tipis (0.05mm)
         pdf.set_line_width(0.05)
         pdf.line(x_start + 1, y_start + h_row - 1.2, x_start + w_value - 1, y_start + h_row - 1.2)
         
         if is_last:
             pdf.ln(h_row)
 
-    # Pengaturan kolom agar ujung kanan (Wahyudi) sejajar
-    # Baris 1: Technician & Customer
+    # Susunan baru dengan posisi ditukar
+    # Baris 1: Technician & Date (Date dipindah ke sini)
     draw_aligned_cell("Technician", d.get('Completed By'), 25, 65)
-    draw_aligned_cell("Customer", d.get('Customer'), 25, 65, is_last=True)
-    
-    # Baris 2: Meet With & Date (Dibuat sejajar secara horizontal)
-    draw_aligned_cell("Meet With", d.get('Meet With'), 25, 65)
     draw_aligned_cell("Date", d.get('Date'), 25, 65, is_last=True)
     
-    # Baris 3: Machine, Type, & Ser No (Dibuat sejajar secara horizontal)
+    # Baris 2: Meet With & Customer (Customer dipindah ke sini)
+    draw_aligned_cell("Meet With", d.get('Meet With'), 25, 65)
+    draw_aligned_cell("Customer", d.get('Customer'), 25, 65, is_last=True)
+    
+    # Baris 3: Machine, Type & Ser No (Type sejajar dengan Date di atasnya)
     draw_aligned_cell("Machine", d.get('Machine'), 25, 50)
     draw_aligned_cell("Type", d.get('Type'), 12, 40)
     draw_aligned_cell("Ser No", d.get('Serial No'), 18, 35, is_last=True)
@@ -184,6 +182,7 @@ if uploaded_photos:
         photo_caps.append(st.sidebar.text_input(f"Caption Photo {i+1}", key=f"cap_{i}"))
 
 with st.form("main"):
+    # Input field di Streamlit tetap urut, hanya tampilan PDF yang berubah
     c1, c2 = st.columns(2)
     with c1:
         cb = st.text_input("Completed By")
