@@ -7,20 +7,15 @@ from PIL import Image
 import io
 import base64
 
-# --- 1. UTILS & TEXT CLEANING ---
+# --- 1. UTILS ---
 def clean_text(text):
     if not text: return ""
-    # Map common non-latin characters to prevent FPDFUnicodeEncodingException
-    replacements = {
-        '\u2013': '-', '\u2014': '-', '\u2018': "'", '\u2019': "'",
-        '\u201c': '"', '\u201d': '"', '\u2022': '*', '\xb0': ' deg '
-    }
+    replacements = {'\u2013': '-', '\u2014': '-', '\u2018': "'", '\u2019': "'", '\u201c': '"', '\u201d': '"', '\u2022': '*', '\xb0': ' deg '}
     for search, replace in replacements.items():
         text = text.replace(search, replace)
     return text.encode('latin-1', 'ignore').decode('latin-1')
 
 def optimize_image(uploaded_file, max_res=(500, 500)):
-    """Downscale images to prevent memory 'hangs' and blank previews"""
     if uploaded_file is None: return None
     img = Image.open(uploaded_file)
     if img.mode in ("RGBA", "P"): img = img.convert("RGB")
@@ -32,7 +27,6 @@ class PDF(FPDF):
     def __init__(self, logo_img=None):
         super().__init__()
         self.logo_img = logo_img
-        # Tight bottom margin to maximize space on the last page
         self.set_auto_page_break(auto=True, margin=10)
 
     def header(self):
@@ -50,7 +44,7 @@ class PDF(FPDF):
             self.set_text_color(0, 0, 0)
             self.ln(2)
 
-# --- 3. CORE PDF GENERATION ---
+# --- 3. GENERATION FUNCTION ---
 def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
     pdf = PDF(logo_img=logo)
     pdf.add_page()
@@ -60,7 +54,7 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
     h_row = 6.5
     d = {k: clean_text(str(v)) for k, v in data.items()}
 
-    # Data Information Grid
+    # Info Grid
     pdf.cell(30, h_row, " Technician", border=1, fill=True)
     pdf.set_font("helvetica", '', 8); pdf.cell(65, h_row, f" {d.get('Completed By')}", border=1)
     pdf.set_font("helvetica", 'B', 8); pdf.cell(30, h_row, " Customer", border=1, fill=True)
@@ -81,31 +75,27 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
     pdf.ln(3)
     pdf.set_draw_color(41, 128, 185)
     
-    # Problem Description
     pdf.set_font("helvetica", 'B', 10)
     pdf.cell(0, 6, "PROBLEM DESCRIPTION", border='B', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.set_font("helvetica", '', 9)
     pdf.multi_cell(0, 5, d.get('Problem'), border=0)
     pdf.ln(2)
     
-    # Follow Up Action
     pdf.set_font("helvetica", 'B', 10)
     pdf.cell(0, 6, "REPORT / FOLLOW UP ACTION", border='B', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.set_font("helvetica", '', 9)
     pdf.multi_cell(0, 5, d.get('Follow Up'), border=0)
     pdf.ln(3)
 
-    # --- CENTERED IMAGE GRID (2x2) ---
+    # --- IMAGE GRID ---
     if extra_items:
-        # Check if remaining space is too low, then page break
         if pdf.get_y() > 250: pdf.add_page()
-        
         pdf.set_font("helvetica", 'B', 10)
         pdf.cell(0, 6, "DOCUMENTATION PHOTOS", border='B', align='C', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         pdf.ln(3)
         
-        # FIXED: Correct variable unpacking
-        cw, rh, gap = 85, 58, 10
+        # PERBAIKAN: cw, rh, dan gap (3 variabel)
+        cw, rh, gap = 85, 58, 10 
         margin_left = (210 - (cw * 2 + gap)) / 2
         
         start_y = pdf.get_y()
@@ -121,7 +111,7 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
             if y_pos + rh > 280:
                 pdf.add_page()
                 start_y, y_pos = pdf.get_y() + 5, pdf.get_y() + 5
-            
+
             pdf.set_draw_color(200, 200, 200)
             pdf.rect(x_pos, y_pos, cw, rh)
             pdf.image(item['img'], x=x_pos+1, y=y_pos+1, w=cw-2, h=rh-8)
@@ -133,9 +123,7 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
                 pdf.set_y(y_pos + rh + 5)
 
     # --- SIGNATURES ---
-    # Signature threshold set to 255 to force it on the same page as Photo 3 if space exists
     if pdf.get_y() > 255: pdf.add_page()
-    
     pdf.ln(4)
     pdf.set_font("helvetica", 'B', 9)
     pdf.cell(95, 6, "Service Technician,", align='C')
@@ -152,7 +140,7 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
 
     return bytes(pdf.output())
 
-# --- 4. STREAMLIT INTERFACE ---
+# --- 4. UI ---
 st.set_page_config(page_title="Digital Service Report", layout="centered")
 
 if st.sidebar.button("🔄 Clear Cache & Reset"):
@@ -169,7 +157,7 @@ if uploaded_photos:
     for i, _ in enumerate(uploaded_photos):
         photo_caps.append(st.sidebar.text_input(f"Caption {i+1}", key=f"c_{i}"))
 
-with st.form("main_report"):
+with st.form("main"):
     c1, c2 = st.columns(2)
     with c1:
         cb = st.text_input("Completed By")
@@ -180,17 +168,14 @@ with st.form("main_report"):
         ma = st.text_input("Machine")
         ty = st.text_input("Type")
         sn = st.text_input("Serial No")
-    
-    pr = st.text_area("Problem Description")
-    fu = st.text_area("Report / Follow Up Action")
-    
+    pr, fu = st.text_area("Problem Description"), st.text_area("Report / Follow Up Action")
     st.write("---")
     s1, s2 = st.columns(2)
     with s1: 
-        st.write("Technician Signature:")
+        st.write("Technician:")
         ct = st_canvas(stroke_width=2, height=80, width=200, key="ct")
     with s2: 
-        st.write("Customer Signature:")
+        st.write("Customer:")
         cc = st_canvas(stroke_width=2, height=80, width=200, key="cc")
     
     if st.form_submit_button("Generate Report"):
@@ -208,6 +193,5 @@ with st.form("main_report"):
 if 'd' in st.session_state:
     pdf_b = create_pdf(st.session_state['d'], st.session_state['st'], st.session_state['sc'], st.session_state['l'], st.session_state['p'])
     st.download_button("⬇️ Download PDF", data=pdf_b, file_name=f"Report_{st.session_state['d']['Serial No']}.pdf")
-    
     base64_pdf = base64.b64encode(pdf_b).decode()
     st.markdown(f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="800"></iframe>', unsafe_allow_html=True)
