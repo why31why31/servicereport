@@ -22,7 +22,7 @@ def optimize_image(uploaded_file, max_res=(500, 500)):
     img.thumbnail(max_res, Image.Resampling.LANCZOS)
     return img
 
-# --- 2. PDF CLASS (LOGIKA HEADER DIKUNCI) ---
+# --- 2. PDF CLASS ---
 class PDF(FPDF):
     def __init__(self, logo_img=None):
         super().__init__()
@@ -30,7 +30,6 @@ class PDF(FPDF):
         self.set_auto_page_break(auto=True, margin=15)
 
     def header(self):
-        # Kop Surat dan Judul HANYA di halaman 1
         if self.page_no() == 1:
             if self.logo_img:
                 w_orig, h_orig = self.logo_img.size
@@ -51,13 +50,12 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
     pdf = PDF(logo_img=logo)
     pdf.add_page()
     
-    # --- INFO GRID ---
+    # --- DATA GRID ---
     pdf.set_font("helvetica", 'B', 8)
     pdf.set_fill_color(240, 240, 240)
     h_row = 6.5
     d = {k: clean_text(str(v)) for k, v in data.items()}
 
-    # Baris data teknis
     pdf.cell(30, h_row, " Technician", border=1, fill=True)
     pdf.set_font("helvetica", '', 8); pdf.cell(65, h_row, f" {d.get('Completed By')}", border=1)
     pdf.set_font("helvetica", 'B', 8); pdf.cell(30, h_row, " Customer", border=1, fill=True)
@@ -91,7 +89,7 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
     pdf.multi_cell(0, 5, d.get('Follow Up'), border=0)
     pdf.ln(5)
 
-    # --- CENTERED GRID PHOTO (2x2) ---
+    # --- FIXED GRID PHOTO ---
     if extra_items:
         if pdf.get_y() > 220: pdf.add_page()
         
@@ -99,50 +97,49 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
         pdf.cell(0, 8, "DOCUMENTATION PHOTOS", border='B', align='C', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         pdf.ln(4)
         
-        cw, rh, gap = 85, 58, 10
+        cw, rh, gap = 85, 60, 10
         margin_x = (210 - (cw * 2 + gap)) / 2
         
-        # Ambil koordinat Y saat ini sebagai titik start grid
-        base_y = pdf.get_y()
+        # Koordinat Y dikunci per baris
+        current_y = pdf.get_y()
         
         for i, item in enumerate(extra_items):
-            # Cek jika ganti halaman (setiap 4 foto)
+            # Page break setiap 4 foto
             if i > 0 and i % 4 == 0:
                 pdf.add_page()
-                base_y = pdf.get_y() + 5
+                current_y = pdf.get_y() + 10
             elif i > 0 and i % 2 == 0:
-                # Turun ke baris baru setelah foto ke-2 atau ke-4
-                base_y += rh + 12
+                # Pindah ke baris baru di halaman yang sama
+                current_y += rh + 12
             
             col = i % 2
             x_pos = margin_x + (col * (cw + gap))
             
-            # Gambar frame dan foto
+            # Gambar kotak dan foto
             pdf.set_draw_color(200, 200, 200)
-            pdf.rect(x_pos, base_y, cw, rh)
-            pdf.image(item['img'], x=x_pos+1, y=base_y+1, w=cw-2, h=rh-8)
+            pdf.rect(x_pos, current_y, cw, rh)
+            pdf.image(item['img'], x=x_pos+1, y=current_y+1, w=cw-2, h=rh-8)
             
-            # Keterangan
-            pdf.set_xy(x_pos, base_y + rh - 6)
+            # Caption di bawah foto
+            pdf.set_xy(x_pos, current_y + rh - 6)
             pdf.set_font("helvetica", 'I', 7)
             pdf.cell(cw, 5, f"Photo {i+1}: {clean_text(item['caption'][:40])}", align='C')
             
-            # Sinkronisasi Y global setelah row selesai
-            if col == 1 or i == len(extra_items) - 1:
-                pdf.set_y(base_y + rh + 10)
+            # Update posisi Y kursor PDF setelah baris atau elemen terakhir
+            pdf.set_y(current_y + rh + 10)
 
-    # --- SIGNATURES (FIXED AT THE BOTTOM) ---
-    if pdf.get_y() > 250: pdf.add_page()
+    # --- SIGNATURES ---
+    if pdf.get_y() > 240: pdf.add_page()
     pdf.ln(5)
     
     pdf.set_font("helvetica", 'B', 9)
-    sig_start_y = pdf.get_y()
-    pdf.set_xy(10, sig_start_y)
+    sig_y = pdf.get_y()
+    pdf.set_xy(10, sig_y)
     pdf.cell(95, 7, "Service Technician,", align='C')
-    pdf.set_xy(105, sig_start_y)
+    pdf.set_xy(105, sig_y)
     pdf.cell(95, 7, "Customer / PIC,", align='C')
     
-    img_y = sig_start_y + 8
+    img_y = sig_y + 8
     if sig_t: pdf.image(sig_t, x=45, y=img_y, w=25)
     if sig_c: pdf.image(sig_c, x=140, y=img_y, w=25)
     
@@ -190,10 +187,10 @@ with st.form("main"):
     with s2: 
         st.write("Customer Signature:")
         cc = st_canvas(stroke_width=2, height=80, width=200, key="cc")
-    if st.form_submit_button("Process Report"):
+    if st.form_submit_button("Generate Report"):
         if not cb: st.error("Technician name required")
         else:
-            final_p = [{'img': optimize_image(p), 'caption': photo_caps[idx]} for idx, p in enumerate(uploaded_photos)]
+            final_p = [{'img': optimize_image(p), 'caption': photo_caps[idx] if idx < len(photo_caps) else ""} for idx, p in enumerate(uploaded_photos)]
             st.session_state.update({'d': {"Completed By": cb, "Customer": cu, "Meet With": mw, "Date": str(rd), "Machine": ma, "Type": ty, "Serial No": sn, "Problem": pr, "Follow Up": fu}, 
                                      'st': Image.fromarray(ct.image_data.astype('uint8'), 'RGBA') if ct.image_data is not None else None,
                                      'sc': Image.fromarray(cc.image_data.astype('uint8'), 'RGBA') if cc.image_data is not None else None,
@@ -202,4 +199,4 @@ with st.form("main"):
 if 'd' in st.session_state:
     pdf_b = create_pdf(st.session_state['d'], st.session_state['st'], st.session_state['sc'], st.session_state['l'], st.session_state['p'])
     st.download_button("⬇️ Download PDF", data=pdf_b, file_name=f"Report_{st.session_state['d']['Serial No']}.pdf")
-    st.markdown(f'<iframe src="data:application/pdf;base64,{base64.b64encode(pdf_b).decode()}" width="100%" height="800"></iframe>', unsafe_allow_html=True)
+    st.markdown(f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="800"></iframe>', unsafe_allow_html=True)
