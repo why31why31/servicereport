@@ -54,24 +54,21 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
     
-    # --- DATA GRID (PRECISE ALIGNMENT) ---
     pdf.set_fill_color(240, 240, 240)
     h_row = 6.5
     d = {k: clean_text(str(v)) for k, v in data.items()}
 
     def draw_aligned_cell(label, value, w_label, w_value, is_last=False):
-        # 1. Label & Titik Dua
         pdf.set_font("helvetica", 'B', 8)
         pdf.cell(w_label - 3, h_row, f" {label}", border=0, fill=True)
         pdf.cell(3, h_row, ":", border=0, fill=True, align='C')
         
-        # 2. Value dengan Garis Bawah Tipis
         x_start = pdf.get_x()
         y_start = pdf.get_y()
         pdf.set_font("helvetica", '', 8)
         pdf.cell(w_value, h_row, f" {value}", border=0)
         
-        # Garis bawah ultra tipis (0.05mm)
+        # Garis bawah ultra tipis (0.05mm) sejajar
         pdf.set_line_width(0.05)
         pdf.line(x_start + 1, y_start + h_row - 1.2, x_start + w_value - 1, y_start + h_row - 1.2)
         
@@ -79,15 +76,15 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
             pdf.ln(h_row)
 
     # Susunan baru dengan posisi ditukar
-    # Baris 1: Technician & Date (Date dipindah ke sini)
+    # Baris 1: Technician & Date
     draw_aligned_cell("Technician", d.get('Completed By'), 25, 65)
     draw_aligned_cell("Date", d.get('Date'), 25, 65, is_last=True)
     
-    # Baris 2: Meet With & Customer (Customer dipindah ke sini)
-    draw_aligned_cell("Meet With", d.get('Meet With'), 25, 65)
-    draw_aligned_cell("Customer", d.get('Customer'), 25, 65, is_last=True)
+    # Baris 2: Customer & Meet With (Posisi ditukar di sini)
+    draw_aligned_cell("Customer", d.get('Customer'), 25, 65)
+    draw_aligned_cell("Meet With", d.get('Meet With'), 25, 65, is_last=True)
     
-    # Baris 3: Machine, Type & Ser No (Type sejajar dengan Date di atasnya)
+    # Baris 3: Machine, Type & Ser No
     draw_aligned_cell("Machine", d.get('Machine'), 25, 50)
     draw_aligned_cell("Type", d.get('Type'), 12, 40)
     draw_aligned_cell("Ser No", d.get('Serial No'), 18, 35, is_last=True)
@@ -95,7 +92,6 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
     pdf.ln(4)
     pdf.set_draw_color(41, 128, 185)
     
-    # --- DESCRIPTIONS ---
     pdf.set_font("helvetica", 'B', 10)
     pdf.cell(0, 7, "PROBLEM DESCRIPTION", border='B', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.set_font("helvetica", '', 9)
@@ -108,7 +104,6 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
     pdf.multi_cell(0, 5, d.get('Follow Up'), border=0)
     pdf.ln(4)
 
-    # --- IMAGE GRID ---
     if extra_items:
         if pdf.get_y() > 210: pdf.add_page()
         pdf.set_font("helvetica", 'B', 10)
@@ -141,7 +136,6 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
             pdf.cell(cw, 5, f"Photo {i+1}: {clean_text(item['caption'][:40])}", align='C')
             pdf.set_y(row_y + rh + 8)
 
-    # --- SIGNATURES ---
     if pdf.get_y() > 240: pdf.add_page()
     pdf.ln(5)
     pdf.set_font("helvetica", 'B', 9)
@@ -182,7 +176,6 @@ if uploaded_photos:
         photo_caps.append(st.sidebar.text_input(f"Caption Photo {i+1}", key=f"cap_{i}"))
 
 with st.form("main"):
-    # Input field di Streamlit tetap urut, hanya tampilan PDF yang berubah
     c1, c2 = st.columns(2)
     with c1:
         cb = st.text_input("Completed By")
