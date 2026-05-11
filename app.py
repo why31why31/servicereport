@@ -54,43 +54,45 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
     
-    # --- DATA GRID (ALIGNED COLON & THIN UNDERLINE) ---
-    pdf.set_font("helvetica", 'B', 8)
+    # --- DATA GRID (PRECISE ALIGNMENT & ULTRA-THIN UNDERLINE) ---
     pdf.set_fill_color(240, 240, 240)
     h_row = 6.5
     d = {k: clean_text(str(v)) for k, v in data.items()}
 
     def draw_aligned_cell(label, value, w_label, w_value, is_last=False):
-        # 1. Gambar Label
+        # 1. Label
         pdf.set_font("helvetica", 'B', 8)
         pdf.cell(w_label - 3, h_row, f" {label}", border=0, fill=True)
         
-        # 2. Gambar Titik Dua (Sejajar)
+        # 2. Titik Dua (Sejajar)
         pdf.cell(3, h_row, ":", border=0, fill=True, align='C')
         
-        # 3. Gambar Value dengan Underline Halus
+        # 3. Value
         x_start = pdf.get_x()
         y_start = pdf.get_y()
         pdf.set_font("helvetica", '', 8)
         pdf.cell(w_value, h_row, f" {value}", border=0)
         
-        # Gambar garis bawah tipis manual (0.1mm)
-        pdf.set_line_width(0.1)
-        pdf.line(x_start + 1, y_start + h_row - 1, x_start + w_value - 1, y_start + h_row - 1)
+        # Garis bawah ultra tipis (0.05mm) sejajar di ujung kanan
+        pdf.set_line_width(0.05)
+        pdf.line(x_start + 1, y_start + h_row - 1.2, x_start + w_value - 1, y_start + h_row - 1.2)
         
         if is_last:
             pdf.ln(h_row)
 
-    # Susunan baris data
+    # Pengaturan kolom agar ujung kanan (Wahyudi) sejajar
+    # Baris 1: Technician & Customer
     draw_aligned_cell("Technician", d.get('Completed By'), 25, 65)
     draw_aligned_cell("Customer", d.get('Customer'), 25, 65, is_last=True)
     
+    # Baris 2: Meet With & Date (Dibuat sejajar secara horizontal)
     draw_aligned_cell("Meet With", d.get('Meet With'), 25, 65)
     draw_aligned_cell("Date", d.get('Date'), 25, 65, is_last=True)
     
-    draw_aligned_cell("Machine", d.get('Machine'), 25, 55)
-    draw_aligned_cell("Type", d.get('Type'), 12, 30)
-    draw_aligned_cell("Ser No", d.get('Serial No'), 18, 30, is_last=True)
+    # Baris 3: Machine, Type, & Ser No (Dibuat sejajar secara horizontal)
+    draw_aligned_cell("Machine", d.get('Machine'), 25, 50)
+    draw_aligned_cell("Type", d.get('Type'), 12, 40)
+    draw_aligned_cell("Ser No", d.get('Serial No'), 18, 35, is_last=True)
     
     pdf.ln(4)
     pdf.set_draw_color(41, 128, 185)
@@ -116,7 +118,7 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
         pdf.ln(3)
         
         cw, rh, gap = 85, 58, 10
-        margin_x = (210 - (cw * 2 + gap)) / 2
+        m_x = (210 - (cw * 2 + gap)) / 2
         row_y = pdf.get_y()
         
         for i, item in enumerate(extra_items):
@@ -131,7 +133,7 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
                 row_y = 25
 
             col = i % 2
-            x_p = margin_x + (col * (cw + gap))
+            x_p = m_x + (col * (cw + gap))
             
             pdf.set_draw_color(200, 200, 200)
             pdf.rect(x_p, row_y, cw, rh)
