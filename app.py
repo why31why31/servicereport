@@ -54,31 +54,33 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
     
-    # --- DATA GRID (CLEAN LOOK - NO BORDERS) ---
+    # --- DATA GRID (WITH COLON AND UNDERLINE) ---
     pdf.set_font("helvetica", 'B', 8)
     pdf.set_fill_color(240, 240, 240)
     h_row = 6.5
     d = {k: clean_text(str(v)) for k, v in data.items()}
 
+    def draw_data_cell(label, value, w_label, w_value, is_last=False):
+        pdf.set_font("helvetica", 'B', 8)
+        pdf.cell(w_label, h_row, f" {label} :", border=0, fill=True)
+        pdf.set_font("helvetica", 'U', 8) # Underline untuk input
+        if is_last:
+            pdf.cell(w_value, h_row, f" {value}", border=0, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        else:
+            pdf.cell(w_value, h_row, f" {value}", border=0)
+
     # Row 1
-    pdf.cell(30, h_row, " Technician", border=0, fill=True)
-    pdf.set_font("helvetica", '', 8); pdf.cell(65, h_row, f" {d.get('Completed By')}", border=0)
-    pdf.set_font("helvetica", 'B', 8); pdf.cell(30, h_row, " Customer", border=0, fill=True)
-    pdf.set_font("helvetica", '', 8); pdf.cell(65, h_row, f" {d.get('Customer')}", border=0, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    draw_data_cell("Technician", d.get('Completed By'), 30, 65)
+    draw_data_cell("Customer", d.get('Customer'), 30, 65, is_last=True)
     
     # Row 2
-    pdf.set_font("helvetica", 'B', 8); pdf.cell(30, h_row, " Meet With", border=0, fill=True)
-    pdf.set_font("helvetica", '', 8); pdf.cell(65, h_row, f" {d.get('Meet With')}", border=0)
-    pdf.set_font("helvetica", 'B', 8); pdf.cell(30, h_row, " Date", border=0, fill=True)
-    pdf.set_font("helvetica", '', 8); pdf.cell(65, h_row, f" {d.get('Date')}", border=0, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    draw_data_cell("Meet With", d.get('Meet With'), 30, 65)
+    draw_data_cell("Date", d.get('Date'), 30, 65, is_last=True)
     
     # Row 3
-    pdf.set_font("helvetica", 'B', 8); pdf.cell(30, h_row, " Machine", border=0, fill=True)
-    pdf.set_font("helvetica", '', 8); pdf.cell(65, h_row, f" {d.get('Machine')}", border=0)
-    pdf.set_font("helvetica", 'B', 8); pdf.cell(15, h_row, " Type", border=0, fill=True)
-    pdf.set_font("helvetica", '', 8); pdf.cell(30, h_row, f" {d.get('Type')}", border=0)
-    pdf.set_font("helvetica", 'B', 8); pdf.cell(20, h_row, " Ser No", border=0, fill=True)
-    pdf.set_font("helvetica", '', 8); pdf.cell(30, h_row, f" {d.get('Serial No')}", border=0, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    draw_data_cell("Machine", d.get('Machine'), 30, 65)
+    draw_data_cell("Type", d.get('Type'), 15, 30)
+    draw_data_cell("Ser No", d.get('Serial No'), 20, 30, is_last=True)
     
     pdf.ln(4)
     pdf.set_draw_color(41, 128, 185)
@@ -96,7 +98,7 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
     pdf.multi_cell(0, 5, d.get('Follow Up'), border=0)
     pdf.ln(4)
 
-    # --- IMAGE GRID (COORDINATE LOCK) ---
+    # --- IMAGE GRID ---
     if extra_items:
         if pdf.get_y() > 210: pdf.add_page()
         pdf.set_font("helvetica", 'B', 10)
