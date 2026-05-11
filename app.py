@@ -27,7 +27,6 @@ class PDF(FPDF):
     def __init__(self, logo_img=None):
         super().__init__()
         self.logo_img = logo_img
-        # Margin bawah dipersempit agar tanda tangan tidak mudah pindah halaman
         self.set_auto_page_break(auto=True, margin=12)
 
     def header(self):
@@ -50,7 +49,6 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
     pdf = PDF(logo_img=logo)
     pdf.add_page()
     
-    # --- INFO GRID ---
     pdf.set_font("helvetica", 'B', 8)
     pdf.set_fill_color(240, 240, 240)
     h_row = 6.5
@@ -76,7 +74,6 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
     pdf.ln(3)
     pdf.set_draw_color(41, 128, 185)
     
-    # --- DESCRIPTIONS ---
     pdf.set_font("helvetica", 'B', 10)
     pdf.cell(0, 6, "PROBLEM DESCRIPTION", border='B', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.set_font("helvetica", '', 9)
@@ -89,59 +86,41 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
     pdf.multi_cell(0, 5, d.get('Follow Up'), border=0)
     pdf.ln(4)
 
-    # --- CENTERED IMAGE GRID (FIXED ALIGNMENT) ---
     if extra_items:
         if pdf.get_y() > 220: pdf.add_page()
-        
         pdf.set_font("helvetica", 'B', 10)
         pdf.cell(0, 7, "DOCUMENTATION PHOTOS", border='B', align='C', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         pdf.ln(3)
-        
         cw, rh, gap = 85, 58, 10
         margin_x = (210 - (cw * 2 + gap)) / 2
-        
-        # Titik Y awal untuk halaman saat ini
         current_row_y = pdf.get_y()
-        
         for i, item in enumerate(extra_items):
-            # Page break setiap 4 foto
             if i > 0 and i % 4 == 0:
                 pdf.add_page()
                 current_row_y = pdf.get_y() + 5
             elif i > 0 and i % 2 == 0:
-                # Update koordinat Y hanya ketika pindah baris
                 current_row_y += rh + 10
-            
             col = i % 2
-            x_p = margin_x + (col * (cw + gap))
-            y_p = current_row_y
-            
+            x_p, y_p = margin_x + (col * (cw + gap)), current_row_y
             pdf.set_draw_color(200, 200, 200)
             pdf.rect(x_p, y_p, cw, rh)
             pdf.image(item['img'], x=x_p+1, y=y_p+1, w=cw-2, h=rh-8)
-            
             pdf.set_xy(x_p, y_p + rh - 6)
             pdf.set_font("helvetica", 'I', 7)
             pdf.cell(cw, 5, f"Photo {i+1}: {clean_text(item['caption'][:40])}", align='C')
-            
-            # Update posisi kursor Y global PDF setelah baris selesai atau foto terakhir
             pdf.set_y(current_row_y + rh + 8)
 
-    # --- SIGNATURES ---
     if pdf.get_y() > 250: pdf.add_page()
     pdf.ln(5)
-    
     pdf.set_font("helvetica", 'B', 9)
     sig_y = pdf.get_y()
     pdf.set_xy(10, sig_y)
     pdf.cell(95, 7, "Service Technician,", align='C')
     pdf.set_xy(105, sig_y)
     pdf.cell(95, 7, "Customer / PIC,", align='C')
-    
     img_y = sig_y + 8
     if sig_t: pdf.image(sig_t, x=45, y=img_y, w=25)
     if sig_c: pdf.image(sig_c, x=140, y=img_y, w=25)
-    
     name_y = img_y + 18
     pdf.set_font("helvetica", 'BU', 9)
     pdf.set_xy(10, name_y)
@@ -152,7 +131,6 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
     return bytes(pdf.output())
 
 # --- 4. UI ---
-# Gunakan variabel mw untuk Meet With agar tidak terjadi NameError
 st.set_page_config(page_title="Digital Service Report", layout="centered")
 if st.sidebar.button("🔄 Reset Application"):
     st.session_state.clear()
@@ -197,6 +175,10 @@ with st.form("main"):
                                      'l': optimize_image(uploaded_logo), 'p': final_p})
 
 if 'd' in st.session_state:
+    st.write("---")
     pdf_b = create_pdf(st.session_state['d'], st.session_state['st'], st.session_state['sc'], st.session_state['l'], st.session_state['p'])
     st.download_button("⬇️ Download PDF", data=pdf_b, file_name=f"Report_{st.session_state['d']['Serial No']}.pdf")
+    
+    # PERBAIKAN: Mendefinisikan base64_pdf sebelum digunakan di st.markdown
+    base64_pdf = base64.b64encode(pdf_b).decode()
     st.markdown(f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="800"></iframe>', unsafe_allow_html=True)
