@@ -68,23 +68,20 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
         pdf.set_font("helvetica", '', 8)
         pdf.cell(w_value, h_row, f" {value}", border=0)
         
-        # Garis bawah ultra tipis (0.05mm) sejajar
-        pdf.set_line_width(0.005)
+        # Garis bawah ultra tipis (0.05mm) sejajar untuk kesan bersih
+        pdf.set_line_width(0.05)
         pdf.line(x_start + 1, y_start + h_row - 1.2, x_start + w_value - 1, y_start + h_row - 1.2)
         
         if is_last:
             pdf.ln(h_row)
 
-    # Susunan baru dengan posisi ditukar
-    # Baris 1: Technician & Date
+    # Tampilan grid info yang sejajar
     draw_aligned_cell("Technician", d.get('Completed By'), 25, 65)
     draw_aligned_cell("Date", d.get('Date'), 25, 65, is_last=True)
     
-    # Baris 2: Customer & Meet With (Posisi ditukar di sini)
     draw_aligned_cell("Customer", d.get('Customer'), 25, 65)
     draw_aligned_cell("Meet With", d.get('Meet With'), 25, 65, is_last=True)
     
-    # Baris 3: Machine, Type & Ser No
     draw_aligned_cell("Machine", d.get('Machine'), 25, 50)
     draw_aligned_cell("Type", d.get('Type'), 12, 40)
     draw_aligned_cell("Ser No", d.get('Serial No'), 18, 35, is_last=True)
