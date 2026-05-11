@@ -10,7 +10,10 @@ import base64
 # --- 1. UTILS ---
 def clean_text(text):
     if not text: return ""
-    replacements = {'\u2013': '-', '\u2014': '-', '\u2018': "'", '\u2019': "'", '\u201c': '"', '\u201d': '"', '\u2022': '*', '\xb0': ' deg '}
+    replacements = {
+        '\u2013': '-', '\u2014': '-', '\u2018': "'", '\u2019': "'", 
+        '\u201c': '"', '\u201d': '"', '\u2022': '*', '\xb0': ' deg '
+    }
     for search, replace in replacements.items():
         text = text.replace(search, replace)
     return text.encode('latin-1', 'ignore').decode('latin-1')
@@ -18,7 +21,8 @@ def clean_text(text):
 def optimize_image(uploaded_file, max_res=(500, 500)):
     if uploaded_file is None: return None
     img = Image.open(uploaded_file)
-    if img.mode in ("RGBA", "P"): img = img.convert("RGB")
+    if img.mode in ("RGBA", "P"): 
+        img = img.convert("RGB")
     img.thumbnail(max_res, Image.Resampling.LANCZOS)
     return img
 
@@ -89,31 +93,24 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
     pdf.multi_cell(0, 5, d.get('Follow Up'), border=0)
     pdf.ln(4)
 
-    # --- CENTERED IMAGE GRID (COORDINATE LOCK) ---
+    # --- IMAGE GRID ---
     if extra_items:
-        # Jika sisa ruang sempit, pindah halaman sebelum judul foto
         if pdf.get_y() > 210: pdf.add_page()
-        
         pdf.set_font("helvetica", 'B', 10)
         pdf.cell(0, 8, "Attachments Pic", border='B', align='C', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         pdf.ln(3)
         
         cw, rh, gap = 85, 58, 10
         margin_x = (210 - (cw * 2 + gap)) / 2
-        
-        # Lock koordinat Y awal baris
         row_y = pdf.get_y()
         
         for i, item in enumerate(extra_items):
-            # Halaman baru setiap 4 foto
             if i > 0 and i % 4 == 0:
                 pdf.add_page()
                 row_y = 25
             elif i > 0 and i % 2 == 0:
-                # Pindah ke baris baru: kunci Y baru
                 row_y += rh + 12
             
-            # Cek sisa ruang manual agar tidak terpotong
             if row_y + rh > 280:
                 pdf.add_page()
                 row_y = 25
@@ -121,21 +118,16 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
             col = i % 2
             x_p = margin_x + (col * (cw + gap))
             
-            # Gambar frame & foto (Menggunakan row_y yang sama untuk satu baris)
             pdf.set_draw_color(200, 200, 200)
             pdf.rect(x_p, row_y, cw, rh)
             pdf.image(item['img'], x=x_p+1, y=row_y+1, w=cw-2, h=rh-8)
             
-            # Caption di bawah foto
             pdf.set_xy(x_p, row_y + rh - 5)
             pdf.set_font("helvetica", 'I', 7)
             pdf.cell(cw, 5, f"Photo {i+1}: {clean_text(item['caption'][:40])}", align='C')
-            
-            # Pastikan kursor utama PDF selalu berada di bawah elemen terakhir baris tersebut
             pdf.set_y(row_y + rh + 8)
 
     # --- SIGNATURES ---
-    # Tanda tangan dipaksa ke halaman baru jika sisa ruang < 4cm
     if pdf.get_y() > 240: pdf.add_page()
     pdf.ln(5)
     pdf.set_font("helvetica", 'B', 9)
@@ -160,6 +152,7 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
 
 # --- 4. UI ---
 st.set_page_config(page_title="Finpac Service Report", layout="centered")
+
 if st.sidebar.button("🔄 Clear App Cache"):
     st.cache_data.clear()
     st.session_state.clear()
@@ -172,7 +165,7 @@ uploaded_photos = st.sidebar.file_uploader("Photos", type=["png", "jpg", "jpeg"]
 photo_caps = []
 if uploaded_photos:
     for i, _ in enumerate(uploaded_photos):
-        photo_caps.append(st.sidebar.text_input(f"Caption Photo {i+1}", key=f"cap_{i}"))
+        photo_caps.append(st.sidebar.text_input(f"Caption {i+1}", key=f"cap_{i}"))
 
 with st.form("main"):
     c1, c2 = st.columns(2)
@@ -210,4 +203,6 @@ if 'd' in st.session_state:
     st.write("---")
     output_pdf = create_pdf(st.session_state['d'], st.session_state['st'], st.session_state['sc'], st.session_state['l'], st.session_state['p'])
     st.download_button("⬇️ Download PDF", data=output_pdf, file_name=f"Report_{st.session_state['d']['Serial No']}.pdf")
-    st.markdown(f'<iframe src="data:application/pdf;base64,{base64.b64encode(output_pdf).decode()}" width="100%" height="800"></iframe>', unsafe_allow_html=True)
+    
+    base64_pdf = base64.b64encode(output_pdf).decode()
+    st.markdown(f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="800"></iframe>', unsafe_allow_html=True)
