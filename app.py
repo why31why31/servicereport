@@ -54,7 +54,7 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
     h_row = 6.5
     d = {k: clean_text(str(v)) for k, v in data.items()}
 
-    # Info Grid
+    # Data Information Grid
     pdf.cell(30, h_row, " Technician", border=1, fill=True)
     pdf.set_font("helvetica", '', 8); pdf.cell(65, h_row, f" {d.get('Completed By')}", border=1)
     pdf.set_font("helvetica", 'B', 8); pdf.cell(30, h_row, " Customer", border=1, fill=True)
@@ -87,39 +87,44 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
     pdf.multi_cell(0, 5, d.get('Follow Up'), border=0)
     pdf.ln(3)
 
-    # --- IMAGE GRID ---
+    # --- CENTERED & ALIGNED IMAGE GRID ---
     if extra_items:
+        # Check if enough space remains on page 1
         if pdf.get_y() > 250: pdf.add_page()
+        
         pdf.set_font("helvetica", 'B', 10)
         pdf.cell(0, 6, "DOCUMENTATION PHOTOS", border='B', align='C', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-        pdf.ln(3)
+        pdf.ln(4)
         
-        # PERBAIKAN: cw, rh, dan gap (3 variabel)
         cw, rh, gap = 85, 58, 10 
         margin_left = (210 - (cw * 2 + gap)) / 2
         
-        start_y = pdf.get_y()
+        # Capture current Y as the row start
+        row_start_y = pdf.get_y()
+        
         for i, item in enumerate(extra_items):
+            # Page break every 4 photos
             if i > 0 and i % 4 == 0:
                 pdf.add_page()
-                start_y = pdf.get_y() + 5
+                row_start_y = pdf.get_y() + 5
             
-            col, row = i % 2, (i // 2) % 2
+            col = i % 2
+            row = (i // 2) % 2 # row relative to the current set of 4
+            
             x_pos = margin_left + (col * (cw + gap))
-            y_pos = start_y + (row * (rh + 10))
+            y_pos = row_start_y + (row * (rh + 10))
             
-            if y_pos + rh > 280:
-                pdf.add_page()
-                start_y, y_pos = pdf.get_y() + 5, pdf.get_y() + 5
-
+            # Ensure vertical alignment even if previous photo description varies
             pdf.set_draw_color(200, 200, 200)
             pdf.rect(x_pos, y_pos, cw, rh)
             pdf.image(item['img'], x=x_pos+1, y=y_pos+1, w=cw-2, h=rh-8)
+            
             pdf.set_xy(x_pos, y_pos + rh - 6)
             pdf.set_font("helvetica", 'I', 7)
             pdf.cell(cw, 5, f"Photo {i+1}: {clean_text(item['caption'][:40])}", align='C')
             
-            if col == 1 or i == len(extra_items)-1:
+            # After finishing a row (the second column), update global Y
+            if col == 1 or i == len(extra_items) - 1:
                 pdf.set_y(y_pos + rh + 5)
 
     # --- SIGNATURES ---
@@ -179,7 +184,7 @@ with st.form("main"):
         cc = st_canvas(stroke_width=2, height=80, width=200, key="cc")
     
     if st.form_submit_button("Generate Report"):
-        if not cb: st.error("Technician name is required")
+        if not cb: st.error("Name required")
         else:
             final_p = [{'img': optimize_image(p), 'caption': photo_caps[idx]} for idx, p in enumerate(uploaded_photos)]
             st.session_state.update({
