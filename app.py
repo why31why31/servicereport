@@ -6,6 +6,7 @@ from streamlit_drawable_canvas import st_canvas
 from PIL import Image
 import io
 import base64
+import os
 
 # --- 1. UTILS ---
 def clean_text(text):
@@ -18,13 +19,22 @@ def clean_text(text):
         text = text.replace(search, replace)
     return text.encode('latin-1', 'ignore').decode('latin-1')
 
-def optimize_image(uploaded_file, max_res=(500, 500)):
-    if uploaded_file is None: return None
-    img = Image.open(uploaded_file)
-    if img.mode in ("RGBA", "P"): 
-        img = img.convert("RGB")
-    img.thumbnail(max_res, Image.Resampling.LANCZOS)
-    return img
+def optimize_image(image_input, max_res=(500, 500)):
+    if image_input is None: return None
+    try:
+        if isinstance(image_input, str):
+            if os.path.exists(image_input):
+                img = Image.open(image_input)
+            else: return None
+        else:
+            img = Image.open(image_input)
+            
+        if img.mode in ("RGBA", "P"): 
+            img = img.convert("RGB")
+        img.thumbnail(max_res, Image.Resampling.LANCZOS)
+        return img
+    except:
+        return None
 
 # --- 2. PDF CLASS ---
 class PDF(FPDF):
@@ -63,19 +73,16 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
         pdf.cell(w_label - 3, h_row, f" {label}", border=0, fill=True)
         pdf.cell(3, h_row, ":", border=0, fill=True, align='C')
         
-        x_start = pdf.get_x()
-        y_start = pdf.get_y()
+        x_start, y_start = pdf.get_x(), pdf.get_y()
         pdf.set_font("helvetica", '', 8)
         pdf.cell(w_value, h_row, f" {value}", border=0)
         
-        # Garis bawah ultra tipis (0.05mm) sejajar untuk kesan bersih
+        # Garis bawah ultra tipis (0.05mm)
         pdf.set_line_width(0.05)
         pdf.line(x_start + 1, y_start + h_row - 1.2, x_start + w_value - 1, y_start + h_row - 1.2)
-        
-        if is_last:
-            pdf.ln(h_row)
+        if is_last: pdf.ln(h_row)
 
-    # Tampilan grid info yang sejajar
+    # Susunan Grid Info
     draw_aligned_cell("Technician", d.get('Completed By'), 25, 65)
     draw_aligned_cell("Date", d.get('Date'), 25, 65, is_last=True)
     
@@ -88,7 +95,6 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
     
     pdf.ln(4)
     pdf.set_draw_color(41, 128, 185)
-    
     pdf.set_font("helvetica", 'B', 10)
     pdf.cell(0, 7, "PROBLEM DESCRIPTION", border='B', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.set_font("helvetica", '', 9)
@@ -106,25 +112,19 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
         pdf.set_font("helvetica", 'B', 10)
         pdf.cell(0, 8, "Attachments Pic", border='B', align='C', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         pdf.ln(3)
-        
         cw, rh, gap = 85, 58, 10
-        m_x = (210 - (cw * 2 + gap)) / 2
+        margin_x = (210 - (cw * 2 + gap)) / 2
         row_y = pdf.get_y()
-        
         for i, item in enumerate(extra_items):
             if i > 0 and i % 4 == 0:
                 pdf.add_page()
                 row_y = 25
-            elif i > 0 and i % 2 == 0:
-                row_y += rh + 12
-            
+            elif i > 0 and i % 2 == 0: row_y += rh + 12
             if row_y + rh > 280:
                 pdf.add_page()
                 row_y = 25
-
             col = i % 2
-            x_p = m_x + (col * (cw + gap))
-            
+            x_p = margin_x + (col * (cw + gap))
             pdf.set_draw_color(200, 200, 200)
             pdf.rect(x_p, row_y, cw, rh)
             pdf.image(item['img'], x=x_p+1, y=row_y+1, w=cw-2, h=rh-8)
@@ -141,22 +141,23 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
     pdf.cell(95, 7, "Service Technician,", align='C')
     pdf.set_xy(105, sig_y)
     pdf.cell(95, 7, "Customer,", align='C')
-    
     img_y = sig_y + 8
     if sig_t: pdf.image(sig_t, x=45, y=img_y, w=25)
     if sig_c: pdf.image(sig_c, x=140, y=img_y, w=25)
-    
     name_y = img_y + 18
     pdf.set_font("helvetica", 'BU', 9)
     pdf.set_xy(10, name_y)
     pdf.cell(95, 7, f"{d.get('Completed By')}", align='C')
     pdf.set_xy(105, name_y)
     pdf.cell(95, 7, f"{d.get('Meet With')}", align='C')
-
     return bytes(pdf.output())
 
 # --- 4. UI ---
 st.set_page_config(page_title="Finpac Service Report", layout="centered")
+
+# DETEKSI LOGO OTOMATIS
+LOCAL_LOGO_PATH = "logo.png" 
+default_logo = optimize_image(LOCAL_LOGO_PATH)
 
 if st.sidebar.button("🔄 Clear App Cache"):
     st.cache_data.clear()
@@ -164,19 +165,24 @@ if st.sidebar.button("🔄 Clear App Cache"):
     st.rerun()
 
 st.title("Digital Service Report")
-uploaded_logo = st.sidebar.file_uploader("Logo", type=["png", "jpg", "jpeg"])
+if default_logo:
+    st.sidebar.success("✅ Logo otomatis (logo.png) terdeteksi")
+else:
+    st.sidebar.warning("⚠️ logo.png tidak ditemukan di folder")
+
+uploaded_logo = st.sidebar.file_uploader("Ganti Logo Manual", type=["png", "jpg", "jpeg"])
 uploaded_photos = st.sidebar.file_uploader("Photos", type=["png", "jpg", "jpeg"], accept_multiple_files=True)
 
 photo_caps = []
 if uploaded_photos:
     for i, _ in enumerate(uploaded_photos):
-        photo_caps.append(st.sidebar.text_input(f"Caption Photo {i+1}", key=f"cap_{i}"))
+        photo_caps.append(st.sidebar.text_input(f"Caption {i+1}", key=f"cap_{i}"))
 
 with st.form("main"):
     c1, c2 = st.columns(2)
     with c1:
         cb = st.text_input("Completed By")
-        cu = st.text_input("Customer")
+        cu = st.text_input("Customer", value="PT. Finpac Anugerah Indonesia")
         mw = st.text_input("Meet With")
     with c2:
         rd = st.date_input("Date", value=date.today())
@@ -187,27 +193,27 @@ with st.form("main"):
     st.write("---")
     s1, s2 = st.columns(2)
     with s1: 
-        st.write("Technician Signature:")
+        st.write("Technician:")
         ct = st_canvas(stroke_width=2, height=80, width=200, key="ct")
     with s2: 
-        st.write("Customer Signature:")
+        st.write("Customer:")
         cc = st_canvas(stroke_width=2, height=80, width=200, key="cc")
 
     if st.form_submit_button("Generate Report"):
         if not cb: st.error("Technician name required")
         else:
+            final_logo = optimize_image(uploaded_logo) if uploaded_logo else default_logo
             final_p = [{'img': optimize_image(p), 'caption': photo_caps[idx] if idx < len(photo_caps) else ""} for idx, p in enumerate(uploaded_photos)]
             st.session_state.update({
                 'd': {"Completed By": cb, "Customer": cu, "Meet With": mw, "Date": str(rd), "Machine": ma, "Type": ty, "Serial No": sn, "Problem": pr, "Follow Up": fu}, 
                 'st': Image.fromarray(ct.image_data.astype('uint8'), 'RGBA') if ct.image_data is not None else None,
                 'sc': Image.fromarray(cc.image_data.astype('uint8'), 'RGBA') if cc.image_data is not None else None,
-                'l': optimize_image(uploaded_logo), 'p': final_p
+                'l': final_logo, 'p': final_p
             })
 
 if 'd' in st.session_state:
     st.write("---")
     output_pdf = create_pdf(st.session_state['d'], st.session_state['st'], st.session_state['sc'], st.session_state['l'], st.session_state['p'])
     st.download_button("⬇️ Download PDF", data=output_pdf, file_name=f"Report_{st.session_state['d']['Serial No']}.pdf")
-    
     base64_pdf = base64.b64encode(output_pdf).decode()
     st.markdown(f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="800"></iframe>', unsafe_allow_html=True)
