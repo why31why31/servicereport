@@ -54,33 +54,43 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
     
-    # --- DATA GRID (WITH COLON AND UNDERLINE) ---
+    # --- DATA GRID (ALIGNED COLON & THIN UNDERLINE) ---
     pdf.set_font("helvetica", 'B', 8)
     pdf.set_fill_color(240, 240, 240)
     h_row = 6.5
     d = {k: clean_text(str(v)) for k, v in data.items()}
 
-    def draw_data_cell(label, value, w_label, w_value, is_last=False):
+    def draw_aligned_cell(label, value, w_label, w_value, is_last=False):
+        # 1. Gambar Label
         pdf.set_font("helvetica", 'B', 8)
-        pdf.cell(w_label, h_row, f" {label} :", border=0, fill=True)
-        pdf.set_font("helvetica", 'U', 8) # Underline untuk input
+        pdf.cell(w_label - 3, h_row, f" {label}", border=0, fill=True)
+        
+        # 2. Gambar Titik Dua (Sejajar)
+        pdf.cell(3, h_row, ":", border=0, fill=True, align='C')
+        
+        # 3. Gambar Value dengan Underline Halus
+        x_start = pdf.get_x()
+        y_start = pdf.get_y()
+        pdf.set_font("helvetica", '', 8)
+        pdf.cell(w_value, h_row, f" {value}", border=0)
+        
+        # Gambar garis bawah tipis manual (0.1mm)
+        pdf.set_line_width(0.1)
+        pdf.line(x_start + 1, y_start + h_row - 1, x_start + w_value - 1, y_start + h_row - 1)
+        
         if is_last:
-            pdf.cell(w_value, h_row, f" {value}", border=0, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-        else:
-            pdf.cell(w_value, h_row, f" {value}", border=0)
+            pdf.ln(h_row)
 
-    # Row 1
-    draw_data_cell("Technician", d.get('Completed By'), 30, 65)
-    draw_data_cell("Customer", d.get('Customer'), 30, 65, is_last=True)
+    # Susunan baris data
+    draw_aligned_cell("Technician", d.get('Completed By'), 25, 65)
+    draw_aligned_cell("Customer", d.get('Customer'), 25, 65, is_last=True)
     
-    # Row 2
-    draw_data_cell("Meet With", d.get('Meet With'), 30, 65)
-    draw_data_cell("Date", d.get('Date'), 30, 65, is_last=True)
+    draw_aligned_cell("Meet With", d.get('Meet With'), 25, 65)
+    draw_aligned_cell("Date", d.get('Date'), 25, 65, is_last=True)
     
-    # Row 3
-    draw_data_cell("Machine", d.get('Machine'), 30, 65)
-    draw_data_cell("Type", d.get('Type'), 15, 30)
-    draw_data_cell("Ser No", d.get('Serial No'), 20, 30, is_last=True)
+    draw_aligned_cell("Machine", d.get('Machine'), 25, 55)
+    draw_aligned_cell("Type", d.get('Type'), 12, 30)
+    draw_aligned_cell("Ser No", d.get('Serial No'), 18, 30, is_last=True)
     
     pdf.ln(4)
     pdf.set_draw_color(41, 128, 185)
@@ -126,7 +136,6 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
             pdf.set_draw_color(200, 200, 200)
             pdf.rect(x_p, row_y, cw, rh)
             pdf.image(item['img'], x=x_p+1, y=row_y+1, w=cw-2, h=rh-8)
-            
             pdf.set_xy(x_p, row_y + rh - 5)
             pdf.set_font("helvetica", 'I', 7)
             pdf.cell(cw, 5, f"Photo {i+1}: {clean_text(item['caption'][:40])}", align='C')
@@ -170,7 +179,7 @@ uploaded_photos = st.sidebar.file_uploader("Photos", type=["png", "jpg", "jpeg"]
 photo_caps = []
 if uploaded_photos:
     for i, _ in enumerate(uploaded_photos):
-        photo_caps.append(st.sidebar.text_input(f"Caption {i+1}", key=f"cap_{i}"))
+        photo_caps.append(st.sidebar.text_input(f"Caption Photo {i+1}", key=f"cap_{i}"))
 
 with st.form("main"):
     c1, c2 = st.columns(2)
