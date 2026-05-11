@@ -69,7 +69,7 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
         pdf.cell(w_value, h_row, f" {value}", border=0)
         
         # Garis bawah ultra tipis (0.05mm) sejajar
-        pdf.set_line_width(0.05)
+        pdf.set_line_width(0.005)
         pdf.line(x_start + 1, y_start + h_row - 1.2, x_start + w_value - 1, y_start + h_row - 1.2)
         
         if is_last:
@@ -179,7 +179,7 @@ with st.form("main"):
     c1, c2 = st.columns(2)
     with c1:
         cb = st.text_input("Completed By")
-        cu = st.text_input("Customer", value="PT. Finpac Anugerah Indonesia")
+        cu = st.text_input("Customer")
         mw = st.text_input("Meet With")
     with c2:
         rd = st.date_input("Date", value=date.today())
