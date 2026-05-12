@@ -5,8 +5,6 @@ from fpdf import FPDF, XPos, YPos
 from streamlit_drawable_canvas import st_canvas
 from PIL import Image
 import io
-import base64
-import os
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 
@@ -31,7 +29,7 @@ def clean_text(text):
     for s, r in replacements.items(): text = text.replace(s, r)
     return text.encode('latin-1', 'ignore').decode('latin-1')
 
-def optimize_image(image_input, max_res=(500, 500)):
+def optimize_image(image_input, max_res=(800, 800)):
     if image_input is None: return None
     try:
         img = Image.open(image_input)
@@ -48,6 +46,7 @@ class PDF(FPDF):
         self.set_margin(15)
 
     def header(self):
+        # Header only on the first page
         if self.page_no() == 1 and self.logo_img:
             w_orig, h_orig = self.logo_img.size
             logo_h = 18
@@ -89,20 +88,38 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
     pdf.cell(0, 7, "REPORT / FOLLOW UP ACTION", border='B', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.multi_cell(0, 5, d.get('Follow Up')); pdf.ln(4)
 
+    # --- UPDATED: AUTOMATIC PAGE BREAK FOR IMAGES ---
     if extra_items:
-        if pdf.get_y() > 210: pdf.add_page()
+        if pdf.get_y() > 180: pdf.add_page() # Check space before starting attachment section
         pdf.set_font("helvetica", 'B', 10); pdf.cell(0, 8, "Attachments Pic", border='B', align='C', new_x=XPos.LMARGIN, new_y=YPos.NEXT); pdf.ln(3)
-        cw, rh = 85, 58; m_x = (210 - (cw * 2 + 10)) / 2; row_y = pdf.get_y()
+        
+        cw, rh = 85, 60 
+        m_x = (210 - (cw * 2 + 10)) / 2
+        
         for i, item in enumerate(extra_items):
-            if i > 0 and i % 4 == 0: pdf.add_page(); row_y = 25
-            elif i > 0 and i % 2 == 0: row_y += rh + 12
-            col = i % 2; x_p = m_x + (col * (cw + 10))
-            pdf.set_draw_color(200, 200, 200); pdf.rect(x_p, row_y, cw, rh)
-            pdf.image(item['img'], x=x_p+1, y=row_y+1, w=cw-2, h=rh-8)
-            pdf.set_xy(x_p, row_y + rh - 5); pdf.set_font("helvetica", 'I', 7)
-            pdf.cell(cw, 5, f"Photo {i+1}: {clean_text(item['caption'][:40])}", align='C')
-            pdf.set_y(row_y + rh + 8)
+            # Page Break Logic: If we are at the start of a new row, check if there's enough room (rh + padding)
+            if i % 2 == 0: 
+                if pdf.get_y() + rh + 15 > 270: 
+                    pdf.add_page()
+                    pdf.ln(5)
 
+            col = i % 2
+            x_p = m_x + (col * (cw + 10))
+            y_curr = pdf.get_y()
+            
+            pdf.set_draw_color(220, 220, 220)
+            pdf.rect(x_p, y_curr, cw, rh)
+            pdf.image(item['img'], x=x_p+1, y=y_curr+1, w=cw-2, h=rh-10)
+            
+            pdf.set_xy(x_p, y_curr + rh - 6)
+            pdf.set_font("helvetica", 'I', 7)
+            pdf.cell(cw, 5, f"Photo {i+1}: {clean_text(item['caption'][:40])}", align='C')
+
+            # Move cursor down only after completing a full row (2 images)
+            if col == 1 or i == len(extra_items) - 1:
+                pdf.set_y(y_curr + rh + 5)
+
+    # --- SIGNATURES (ALWAYS AT BOTTOM) ---
     if pdf.get_y() > 220: pdf.add_page()
     pdf.set_y(240) 
     pdf.set_font("helvetica", 'B', 9); sy = pdf.get_y()
@@ -131,7 +148,6 @@ st.markdown("""
 client = get_gspread_client()
 st.title("Digital Service Report")
 
-# Sidebar
 uploaded_logo = st.sidebar.file_uploader("Change Logo", type=["png", "jpg"])
 uploaded_photos = st.sidebar.file_uploader("Upload Photos", type=["png", "jpg"], accept_multiple_files=True)
 photo_caps = []
@@ -139,12 +155,11 @@ if uploaded_photos:
     for i, _ in enumerate(uploaded_photos):
         photo_caps.append(st.sidebar.text_input(f"Photo {i+1} Caption", key=f"cap_{i}"))
 
-# --- DATA FORM ---
 with st.form("main_form"):
     c1, c2 = st.columns(2)
     with c1:
         cb = st.text_input("Completed By", key="cb_in")
-        cu = st.text_input("Customer", key="cu_in")
+        cu = st.text_input("Customer", value="PT. Finpac Anugerah Indonesia", key="cu_in")
         mw = st.text_input("Meet With", key="mw_in")
         status = st.selectbox("Status", ["Open", "Pending", "Closed"], key="st_in")
     with c2:
@@ -159,28 +174,14 @@ st.write("---")
 st.write("### Signatures")
 
 st.write("**Service Technician Signature:**")
-ct = st_canvas(
-    stroke_width=2, 
-    height=150, 
-    width=None, 
-    key="ct_can", 
-    background_color="rgba(0,0,0,0)", 
-    display_toolbar=True
-)
+ct = st_canvas(stroke_width=2, height=150, width=None, key="ct_can", background_color="rgba(0,0,0,0)", display_toolbar=True)
 
 st.write("**Customer Signature:**")
-cc = st_canvas(
-    stroke_width=2, 
-    height=150, 
-    width=None, 
-    key="cc_can", 
-    background_color="rgba(0,0,0,0)", 
-    display_toolbar=True
-)
+cc = st_canvas(stroke_width=2, height=150, width=None, key="cc_can", background_color="rgba(0,0,0,0)", display_toolbar=True)
 
 if st.button("1. Generate PDF Report", type="primary"):
     if not cb:
-        st.error("Please fill in the form and click 'Proceed to Signature' first.")
+        st.error("Please fill in the form first.")
     else:
         logo = optimize_image(uploaded_logo) if uploaded_logo else optimize_image("logo.png")
         final_p = [{'img': optimize_image(p), 'caption': photo_caps[idx] if idx < len(photo_caps) else ""} for idx, p in enumerate(uploaded_photos)]
@@ -200,7 +201,7 @@ if 'pdf' in st.session_state:
     manual_link = st.text_input("Enter GDrive PDF Link here:", key="manual_link_in")
     
     if st.button("2. Save Data & Reset Form"):
-        if not manual_link: st.warning("Please provide the GDrive link first.")
+        if not manual_link: st.warning("GDrive link is required.")
         elif client:
             try:
                 sheet = client.open(SHEET_NAME).sheet1
