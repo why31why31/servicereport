@@ -103,28 +103,28 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
             pdf.cell(cw, 5, f"Photo {i+1}: {clean_text(item['caption'][:40])}", align='C')
             pdf.set_y(row_y + rh + 8)
 
+    # --- LOCK Tanda Tangan di Dasar ---
     if pdf.get_y() > 220: pdf.add_page()
     pdf.set_y(240) 
     pdf.set_font("helvetica", 'B', 9); sy = pdf.get_y()
     pdf.set_xy(15, sy); pdf.cell(90, 7, "Service Technician,", align='C')
     pdf.set_xy(105, sy); pdf.cell(90, 7, "Customer,", align='C')
-    # Tanda tangan di PDF tetap ukuran proporsional (w=35)
-    if sig_t: pdf.image(sig_t, x=43, y=sy + 7, w=35)
-    if sig_c: pdf.image(sig_c, x=133, y=sy + 7, w=35)
+    if sig_t: pdf.image(sig_t, x=45, y=sy + 7, w=30)
+    if sig_c: pdf.image(sig_c, x=135, y=sy + 7, w=30)
     pdf.set_font("helvetica", 'BU', 9); pdf.set_xy(15, sy + 28); pdf.cell(90, 7, f"{d.get('Completed By')}", align='C')
     pdf.set_xy(105, sy + 28); pdf.cell(90, 7, f"{d.get('Meet With')}", align='C')
     return bytes(pdf.output())
 
 # --- 4. UI ---
-st.set_page_config(page_title="Finpac Service Report", layout="wide") # Ubah ke wide agar nyaman
+st.set_page_config(page_title="Finpac Service Report", layout="wide")
 
-# CSS: LEBAR CANVAS DITINGKATKAN KE 300px
+# CSS: PENYAMAAAN UKURAN FRAME DAN CANVAS (350px x 120px)
 st.markdown("""
     <style>
     iframe[title="streamlit_drawable_canvas.st_canvas"] {
         border: 1px solid #ddd !important;
         border-radius: 4px !important;
-        width: 300px !important;
+        width: 350px !important;
         height: 120px !important;
     }
     </style>
@@ -144,7 +144,7 @@ with st.form("main_form"):
     c1, c2 = st.columns(2)
     with c1:
         cb = st.text_input("Completed By", key="cb_in")
-        cu = st.text_input("Customer", key="cu_in")
+        cu = st.text_input("Customer", value="PT. Finpac Anugerah Indonesia", key="cu_in")
         mw = st.text_input("Meet With", key="mw_in")
         status = st.selectbox("Status", ["Open", "Pending", "Closed"], key="st_in")
     with c2:
@@ -155,15 +155,15 @@ with st.form("main_form"):
     pr, fu = st.text_area("Problem Description", key="pr_in"), st.text_area("Report Action", key="fu_in")
     st.form_submit_button("Lanjut ke Tanda Tangan")
 
-# --- BAGIAN TANDA TANGAN (LEBAR 300px) ---
+# --- BAGIAN TANDA TANGAN (SINKRONISASI UKURAN) ---
 st.write("---")
 s1, s2 = st.columns(2)
 with s1:
     st.write("Technician Signature:")
     ct = st_canvas(
         stroke_width=2, 
-        height=100, 
-        width=300,  # Lebar ditambah
+        height=120,      # Harus sama dengan CSS
+        width=350,       # Harus sama dengan CSS
         key="ct_can", 
         background_color="rgba(0,0,0,0)", 
         display_toolbar=True
@@ -172,8 +172,8 @@ with s2:
     st.write("Customer Signature:")
     cc = st_canvas(
         stroke_width=2, 
-        height=100, 
-        width=300,  # Lebar ditambah
+        height=120,      # Harus sama dengan CSS
+        width=350,       # Harus sama dengan CSS
         key="cc_can", 
         background_color="rgba(0,0,0,0)", 
         display_toolbar=True
@@ -181,12 +181,11 @@ with s2:
 
 if st.button("1. Generate PDF Report", type="primary"):
     if not cb:
-        st.error("Isi data di form atas terlebih dahulu.")
+        st.error("Isi data di atas dahulu.")
     else:
         logo = optimize_image(uploaded_logo) if uploaded_logo else optimize_image("logo.png")
         final_p = [{'img': optimize_image(p), 'caption': photo_caps[idx] if idx < len(photo_caps) else ""} for idx, p in enumerate(uploaded_photos)]
         d_dict = {"Completed By": cb, "Customer": cu, "Meet With": mw, "Date": str(rd), "Machine": ma, "Type": ty, "Serial No": sn, "Problem": pr, "Follow Up": fu}
-        
         sig_t = Image.fromarray(ct.image_data.astype('uint8'), 'RGBA') if ct.image_data is not None else None
         sig_c = Image.fromarray(cc.image_data.astype('uint8'), 'RGBA') if cc.image_data is not None else None
         
@@ -201,8 +200,7 @@ if 'pdf' in st.session_state:
     manual_link = st.text_input("Masukkan Link GDrive PDF di sini:", key="manual_link_in")
     
     if st.button("2. Simpan & Reset Form"):
-        if not manual_link:
-            st.warning("Masukkan link GDrive dahulu.")
+        if not manual_link: st.warning("Masukkan link GDrive.")
         elif client:
             try:
                 sheet = client.open(SHEET_NAME).sheet1
@@ -214,5 +212,4 @@ if 'pdf' in st.session_state:
                 st.success("✅ Data tersimpan!")
                 for key in list(st.session_state.keys()): del st.session_state[key]
                 st.rerun()
-            except Exception as e:
-                st.error(f"Gagal: {e}")
+            except Exception as e: st.error(f"Gagal: {e}")
