@@ -103,14 +103,41 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
             pdf.cell(cw, 5, f"Photo {i+1}: {clean_text(item['caption'][:40])}", align='C')
             pdf.set_y(row_y + rh + 8)
 
-    if pdf.get_y() > 240: pdf.add_page()
-    pdf.ln(5); pdf.set_font("helvetica", 'B', 9); sy = pdf.get_y()
-    pdf.set_xy(10, sy); pdf.cell(95, 7, "Service Technician,", align='C')
-    pdf.set_xy(105, sy); pdf.cell(95, 7, "Customer,", align='C')
-    if sig_t: pdf.image(sig_t, x=45, y=sy+8, w=25)
-    if sig_c: pdf.image(sig_c, x=140, y=sy+8, w=25)
-    pdf.set_font("helvetica", 'BU', 9); pdf.set_xy(10, sy+26); pdf.cell(95, 7, f"{d.get('Completed By')}", align='C')
-    pdf.set_xy(105, sy+26); pdf.cell(95, 7, f"{d.get('Meet With')}", align='C')
+    # --- LOGIKA TANDA TANGAN DI BAWAH HALAMAN ---
+    # Jika halaman saat ini sudah terlalu penuh (misal sisa kurang dari 60mm), 
+    # buat halaman baru agar tanda tangan tidak menabrak teks.
+    if pdf.get_y() > 220:
+        pdf.add_page()
+
+    # Kunci posisi Y di 50mm dari bawah halaman (A4 height 297mm)
+    # 297 - 60 = 237. Kita set ke 240 agar pas di area bawah.
+    pdf.set_y(240) 
+    
+    pdf.set_font("helvetica", 'B', 9)
+    sy = pdf.get_y()
+    
+    # Kolom kiri (Technician)
+    pdf.set_xy(15, sy)
+    pdf.cell(90, 7, "Service Technician,", align='C')
+    
+    # Kolom kanan (Customer)
+    pdf.set_xy(105, sy)
+    pdf.cell(90, 7, "Customer,", align='C')
+    
+    # Gambar Tanda Tangan
+    if sig_t:
+        pdf.image(sig_t, x=45, y=sy + 7, w=30) # Geser y sedikit ke bawah teks
+    if sig_c:
+        pdf.image(sig_c, x=135, y=sy + 7, w=30)
+    
+    # Nama Terang (di bawah tanda tangan)
+    pdf.set_font("helvetica", 'BU', 9)
+    pdf.set_xy(15, sy + 28) # Jarak dari teks "Service Technician"
+    pdf.cell(90, 7, f"{d.get('Completed By')}", align='C')
+    
+    pdf.set_xy(105, sy + 28)
+    pdf.cell(90, 7, f"{d.get('Meet With')}", align='C')
+    
     return bytes(pdf.output())
 
 # --- 4. UI & MAIN LOGIC ---
