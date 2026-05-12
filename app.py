@@ -146,10 +146,16 @@ with st.form("main_form", clear_on_submit=False):
     pr, fu = st.text_area("Problem Description", key="pr_in"), st.text_area("Report Action", key="fu_in")
     st.write("---")
     s1, s2 = st.columns(2)
-    with s1: 
-        st.write("Technician Signature:"); ct = st_canvas(stroke_width=2, height=80, width=200, key="ct_can", background_color="#eee")
-    with s2: 
-        st.write("Customer Signature:"); cc = st_canvas(stroke_width=2, height=80, width=200, key="cc_can", background_color="#eee")
+    # Cari baris ini di dalam kode Anda (ada dua, untuk s1 dan s2)
+with s1: 
+    st.write("Technician Signature:")
+    # Ubah background_color menjadi transparan
+    ct = st_canvas(stroke_width=2, height=80, width=200, key="ct_can", background_color="rgba(0,0,0,0)")
+
+with s2: 
+    st.write("Customer Signature:")
+    # Ubah background_color menjadi transparan
+    cc = st_canvas(stroke_width=2, height=80, width=200, key="cc_can", background_color="rgba(0,0,0,0)")
     
     if st.form_submit_button("1. Generate PDF"):
         if not cb: st.error("Nama Technician harus diisi")
@@ -157,6 +163,7 @@ with st.form("main_form", clear_on_submit=False):
             logo = optimize_image(uploaded_logo) if uploaded_logo else optimize_image("logo.png")
             final_p = [{'img': optimize_image(p), 'caption': photo_caps[idx] if idx < len(photo_caps) else ""} for idx, p in enumerate(uploaded_photos)]
             d_dict = {"Completed By": cb, "Customer": cu, "Meet With": mw, "Date": str(rd), "Machine": ma, "Type": ty, "Serial No": sn, "Problem": pr, "Follow Up": fu}
+            # Bagian ini sudah benar di kode Anda, pastikan tetap seperti ini:
             sig_t = Image.fromarray(ct.image_data.astype('uint8'), 'RGBA') if ct.image_data is not None else None
             sig_c = Image.fromarray(cc.image_data.astype('uint8'), 'RGBA') if cc.image_data is not None else None
             
