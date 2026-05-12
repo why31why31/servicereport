@@ -160,10 +160,10 @@ st.write("---")
 s1, s2 = st.columns(2)
 with s1:
     st.write("Technician Signature:")
-    ct = st_canvas(stroke_width=2, height=80, width=200, key="ct_can", background_color="rgba(0,0,0,0)", display_toolbar=False, update_stoke=True)
+    ct = st_canvas(stroke_width=2, height=80, width=200, key="ct_can", background_color="rgba(0,0,0,0)", display_toolbar=False, update_stroke=True)
 with s2:
     st.write("Customer Signature:")
-    cc = st_canvas(stroke_width=2, height=80, width=200, key="cc_can", background_color="rgba(0,0,0,0)", display_toolbar=False, update_stoke=True)
+    cc = st_canvas(stroke_width=2, height=80, width=200, key="cc_can", background_color="rgba(0,0,0,0)", display_toolbar=False, update_stroke=True)
 
 # Tombol Generate PDF Utama
 if st.button("1. Generate PDF Report", type="primary"):
