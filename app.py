@@ -45,10 +45,10 @@ def create_pdf(data, s_t, s_c, logo, photos):
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
     
-    # Grid Data
+    # Information Summary
     pdf.set_font("helvetica", 'B', 9)
     pdf.cell(0, 8, f"Technician: {data['cb']} | Date: {data['rd']}", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-    pdf.cell(0, 8, f"Customer: {data['cu']} | Meet With: {data['mw']}", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    pdf.cell(0, 8, f"Customer: {data['cu']} | Contact: {data['mw']}", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.cell(0, 8, f"Machine: {data['ma']} | Type: {data['ty']} | SN: {data['sn']}", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     
     pdf.ln(5); pdf.set_font("helvetica", 'B', 10); pdf.cell(0, 7, "PROBLEM DESCRIPTION", border='B', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
@@ -57,19 +57,19 @@ def create_pdf(data, s_t, s_c, logo, photos):
     pdf.set_font("helvetica", 'B', 10); pdf.cell(0, 7, "FOLLOW UP ACTION", border='B', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.set_font("helvetica", '', 10); pdf.multi_cell(0, 6, data['fu'])
 
-    # Photos with overflow fix
+    # Photos Section
     if photos:
         if pdf.get_y() > 180: pdf.add_page()
         pdf.ln(10); pdf.set_font("helvetica", 'B', 10); pdf.cell(0, 8, "ATTACHMENTS", border='B', align='C', new_x=XPos.LMARGIN, new_y=YPos.NEXT); pdf.ln(5)
         for i, p in enumerate(photos):
             if i % 2 == 0 and pdf.get_y() > 210: pdf.add_page()
             x = 15 if i % 2 == 0 else 110
-            y = pdf.get_y()
-            pdf.image(p['img'], x=x, y=y, w=85, h=60)
-            pdf.set_xy(x, y + 62); pdf.set_font("helvetica", 'I', 8); pdf.cell(85, 5, f"Photo {i+1}: {p['cap']}", align='C')
-            if i % 2 == 1 or i == len(photos)-1: pdf.set_y(y + 75)
+            y_img = pdf.get_y()
+            pdf.image(p['img'], x=x, y=y_img, w=85, h=60)
+            pdf.set_xy(x, y_img + 62); pdf.set_font("helvetica", 'I', 8); pdf.cell(85, 5, f"Photo {i+1}: {p['cap']}", align='C')
+            if i % 2 == 1 or i == len(photos)-1: pdf.set_y(y_img + 75)
 
-    # Signatures
+    # Signature Section
     if pdf.get_y() > 220: pdf.add_page()
     pdf.set_y(240); pdf.set_font("helvetica", 'B', 10)
     pdf.cell(90, 7, "Technician,", align='C'); pdf.cell(90, 7, "Customer,", align='C')
@@ -81,66 +81,89 @@ def create_pdf(data, s_t, s_c, logo, photos):
 # --- 3. UI LAYOUT ---
 st.set_page_config(page_title="Service Report", layout="centered")
 
-# Fix for Signature Iframe display
-st.markdown("<style>iframe{border:1px solid #eee !important; border-radius:10px; width:100% !important;}</style>", unsafe_allow_html=True)
+# CSS for better Iframe and Signature visibility
+st.markdown("<style>iframe{border:1px solid #ddd !important; border-radius:8px; width:100% !important; background-color: white;}</style>", unsafe_allow_html=True)
 
 st.title("Digital Service Report")
 client = get_gspread_client()
 
-# Data Input (Direct, no Form for stability)
-cb = st.text_input("Technician Name")
-cu = st.text_input("Customer Name", value="PT. Finpac Anugerah Indonesia")
-mw = st.text_input("Meet With")
-rd = st.date_input("Date", value=date.today())
-ma = st.text_input("Machine")
-ty = st.text_input("Type")
-sn = st.text_input("Serial No")
+# --- SIDEBAR (RESTORED) ---
+with st.sidebar:
+    st.header("Media Upload")
+    logo_file = st.file_uploader("Upload Company Logo", type=["png", "jpg"])
+    st.write("---")
+    photo_files = st.file_uploader("Upload Report Photos", type=["jpg", "png"], accept_multiple_files=True)
+    
+    caps = []
+    if photo_files:
+        st.subheader("Photo Captions")
+        for i, pf in enumerate(photo_files):
+            caps.append(st.text_input(f"Caption for Photo {i+1}", key=f"cap_sb_{i}"))
+
+# --- DATA INPUT ---
+col1, col2 = st.columns(2)
+with col1:
+    cb = st.text_input("Technician Name")
+    cu = st.text_input("Customer Name", value="PT. Finpac Anugerah Indonesia")
+    mw = st.text_input("Meet With")
+    status = st.selectbox("Status", ["Open", "Pending", "Closed"])
+with col2:
+    rd = st.date_input("Date", value=date.today())
+    ma = st.text_input("Machine")
+    ty = st.text_input("Type")
+    sn = st.text_input("Serial No")
+
 pr = st.text_area("Problem Description")
-fu = st.text_area("Action Taken")
+fu = st.text_area("Action Taken / Follow Up")
 
 st.write("---")
-# Photos
-photo_files = st.file_uploader("Upload Photos", type=["jpg", "png"], accept_multiple_files=True)
-caps = [st.text_input(f"Caption {i+1}", key=f"c{i}") for i in range(len(photo_files))]
-
-st.write("---")
-# Signatures
 st.write("### Signatures")
-st.write("Technician:")
-can_t = st_canvas(stroke_width=2, height=150, width=500, key="t_can", background_color="white")
-st.write("Customer:")
-can_c = st_canvas(stroke_width=2, height=150, width=500, key="c_can", background_color="white")
 
-# Main Action Button
+# Technician Canvas
+st.write("**Technician Signature:**")
+can_t = st_canvas(stroke_width=2, height=150, width=500, key="t_can_final", background_color="white", display_toolbar=True)
+
+# Customer Canvas
+st.write("**Customer Signature:**")
+can_c = st_canvas(stroke_width=2, height=150, width=500, key="c_can_final", background_color="white", display_toolbar=True)
+
+# Main Generation Button
 if st.button("🚀 GENERATE PDF REPORT", type="primary", use_container_width=True):
     if not cb:
-        st.error("Missing Technician Name!")
+        st.error("Please enter Technician Name!")
     else:
-        # Process Media
+        # Image Processing
+        logo = Image.open(logo_file) if logo_file else None
         report_photos = []
         for i, pf in enumerate(photo_files):
             img = Image.open(pf)
             img.thumbnail((800, 800))
-            report_photos.append({'img': img, 'cap': caps[i]})
+            report_photos.append({'img': img, 'cap': caps[i] if i < len(caps) else ""})
         
-        # Process Sigs
+        # Signature Processing
         s_t = Image.fromarray(can_t.image_data.astype('uint8')) if can_t.image_data is not None else None
         s_c = Image.fromarray(can_c.image_data.astype('uint8')) if can_c.image_data is not None else None
         
-        bundle = {'cb':cb, 'cu':cu, 'mw':mw, 'rd':str(rd), 'ma':ma, 'ty':ty, 'sn':sn, 'pr':pr, 'fu':fu}
-        pdf_bytes = create_pdf(bundle, s_t, s_c, None, report_photos)
+        data_bundle = {'cb':cb, 'cu':cu, 'mw':mw, 'rd':str(rd), 'ma':ma, 'ty':ty, 'sn':sn, 'pr':pr, 'fu':fu}
         
-        st.session_state['ready_pdf'] = pdf_bytes
-        st.session_state['row'] = [str(rd), cu, ma, ty, sn, pr, fu, cb]
-        st.success("PDF Ready!")
+        pdf_out = create_pdf(data_bundle, s_t, s_c, logo, report_photos)
+        st.session_state['pdf_done'] = pdf_out
+        st.session_state['save_data'] = [str(rd), cu, ma, ty, sn, pr, fu, cb, status]
+        st.success("PDF Created Successfully!")
 
-# Download & Save
-if 'ready_pdf' in st.session_state:
-    st.download_button("📥 DOWNLOAD PDF", data=st.session_state['ready_pdf'], file_name=f"Report_{rd}.pdf", use_container_width=True)
-    link = st.text_input("GDrive Link")
-    if st.button("💾 SAVE TO SPREADSHEET", use_container_width=True):
+# Download and Spreadsheet Save
+if 'pdf_done' in st.session_state:
+    st.write("---")
+    st.download_button("📥 DOWNLOAD PDF", data=st.session_state['pdf_done'], file_name=f"Report_{rd}.pdf", use_container_width=True)
+    
+    g_link = st.text_input("Paste GDrive PDF Link here:")
+    if st.button("💾 SAVE TO SPREADSHEET & RESET", use_container_width=True):
         if client:
-            sheet = client.open(SHEET_NAME).sheet1
-            sheet.append_row(st.session_state['row'] + [link])
-            st.success("Saved!")
-        st.rerun()
+            try:
+                sheet = client.open(SHEET_NAME).sheet1
+                sheet.append_row(st.session_state['save_data'] + [g_link])
+                st.success("Data saved successfully!")
+                for key in list(st.session_state.keys()): del st.session_state[key]
+                st.rerun()
+            except Exception as e:
+                st.error(f"Spreadsheet Error: {e}")
