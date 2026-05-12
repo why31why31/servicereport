@@ -103,7 +103,6 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
             pdf.cell(cw, 5, f"Photo {i+1}: {clean_text(item['caption'][:40])}", align='C')
             pdf.set_y(row_y + rh + 8)
 
-    # --- Tanda Tangan Terkunci di Bawah ---
     if pdf.get_y() > 220: pdf.add_page()
     pdf.set_y(240) 
     pdf.set_font("helvetica", 'B', 9); sy = pdf.get_y()
@@ -139,7 +138,7 @@ if uploaded_photos:
     for i, _ in enumerate(uploaded_photos):
         photo_caps.append(st.sidebar.text_input(f"Caption Foto {i+1}", key=f"cap_{i}"))
 
-# --- BAGIAN FORM (Hanya Teks) ---
+# --- BAGIAN FORM ---
 with st.form("main_form"):
     c1, c2 = st.columns(2)
     with c1:
@@ -153,49 +152,26 @@ with st.form("main_form"):
         ty = st.text_input("Type", key="ty_in")
         sn = st.text_input("Serial No", key="sn_in")
     pr, fu = st.text_area("Problem Description", key="pr_in"), st.text_area("Report Action", key="fu_in")
-    submit_data = st.form_submit_button("Lanjut ke Tanda Tangan")
+    st.form_submit_button("Lanjut ke Tanda Tangan")
 
-# --- BAGIAN TANDA TANGAN (Di Luar Form) ---
+# --- BAGIAN TANDA TANGAN (Tanpa parameter update_stroke) ---
 st.write("---")
 s1, s2 = st.columns(2)
-# CARI BAGIAN INI DAN GANTI (Sekitar baris 163 & 165)
-
 with s1:
     st.write("Technician Signature:")
-    # Pastikan tulisannya update_stroke (DENGAN HURUF R)
-    ct = st_canvas(
-        stroke_width=2, 
-        height=80, 
-        width=200, 
-        key="ct_can", 
-        background_color="rgba(0,0,0,0)", 
-        display_toolbar=False, 
-        update_stroke=True  # <-- Perbaikan di sini
-    )
-
+    ct = st_canvas(stroke_width=2, height=80, width=200, key="ct_can", background_color="rgba(0,0,0,0)", display_toolbar=False)
 with s2:
     st.write("Customer Signature:")
-    # Pastikan tulisannya update_stroke (DENGAN HURUF R)
-    cc = st_canvas(
-        stroke_width=2, 
-        height=80, 
-        width=200, 
-        key="cc_can", 
-        background_color="rgba(0,0,0,0)", 
-        display_toolbar=False, 
-        update_stroke=True  # <-- Perbaikan di sini
-    )
+    cc = st_canvas(stroke_width=2, height=80, width=200, key="cc_can", background_color="rgba(0,0,0,0)", display_toolbar=False)
 
-# Tombol Generate PDF Utama
 if st.button("1. Generate PDF Report", type="primary"):
     if not cb:
-        st.error("Isi data di atas lalu klik 'Lanjut ke Tanda Tangan' terlebih dahulu.")
+        st.error("Isi data di form atas terlebih dahulu.")
     else:
         logo = optimize_image(uploaded_logo) if uploaded_logo else optimize_image("logo.png")
         final_p = [{'img': optimize_image(p), 'caption': photo_caps[idx] if idx < len(photo_caps) else ""} for idx, p in enumerate(uploaded_photos)]
         d_dict = {"Completed By": cb, "Customer": cu, "Meet With": mw, "Date": str(rd), "Machine": ma, "Type": ty, "Serial No": sn, "Problem": pr, "Follow Up": fu}
         
-        # Ambil data Tanda Tangan
         sig_t = Image.fromarray(ct.image_data.astype('uint8'), 'RGBA') if ct.image_data is not None else None
         sig_c = Image.fromarray(cc.image_data.astype('uint8'), 'RGBA') if cc.image_data is not None else None
         
@@ -221,7 +197,6 @@ if 'pdf' in st.session_state:
                 sheet.append_row(full_row, value_input_option='USER_ENTERED')
                 sheet.sort((1, 'asc'), range='A2:K2000')
                 st.success("✅ Data tersimpan!")
-                # Reset total
                 for key in list(st.session_state.keys()): del st.session_state[key]
                 st.rerun()
             except Exception as e:
