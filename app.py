@@ -40,22 +40,6 @@ def optimize_image(image_input, max_res=(500, 500)):
         return img
     except: return None
 
-def make_transparent(canvas_data):
-    """Menghilangkan background canvas agar tanda tangan transparan di PDF"""
-    if canvas_data is not None:
-        img = Image.fromarray(canvas_data.astype('uint8'), 'RGBA')
-        datas = img.getdata()
-        newData = []
-        for item in datas:
-            # Jika pixel berwarna abu-abu (background canvas #eee), ubah jadi transparan
-            if item[0] == 238 and item[1] == 238 and item[2] == 238:
-                newData.append((255, 255, 255, 0))
-            else:
-                newData.append(item)
-        img.putdata(newData)
-        return img
-    return None
-
 # --- 3. PDF CLASS ---
 class PDF(FPDF):
     def __init__(self, logo_img=None):
@@ -91,6 +75,7 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
         pdf.set_line_width(0.05); pdf.line(x + 1, y + h_row - 1.2, x + wv - 1, y + h_row - 1.2)
         if last: pdf.ln(h_row)
 
+    # Grid Utama
     draw_aligned_cell("Technician", d.get('Completed By'), 25, 65)
     draw_aligned_cell("Date", d.get('Date'), 25, 65, last=True)
     draw_aligned_cell("Customer", d.get('Customer'), 25, 65)
@@ -119,28 +104,26 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
             pdf.cell(cw, 5, f"Photo {i+1}: {clean_text(item['caption'][:40])}", align='C')
             pdf.set_y(row_y + rh + 8)
 
-    # --- TANDA TANGAN DI DASAR HALAMAN ---
-    if pdf.get_y() > 210: pdf.add_page()
-    pdf.set_y(235) 
-    pdf.set_font("helvetica", 'B', 10)
-    sy = pdf.get_y()
+    # --- LOGIKA TANDA TANGAN (LOCK DI BAWAH) ---
+    if pdf.get_y() > 220: pdf.add_page()
+    pdf.set_y(240) 
+    pdf.set_font("helvetica", 'B', 9); sy = pdf.get_y()
     pdf.set_xy(15, sy); pdf.cell(90, 7, "Service Technician,", align='C')
     pdf.set_xy(105, sy); pdf.cell(90, 7, "Customer,", align='C')
+    if sig_t: pdf.image(sig_t, x=45, y=sy + 7, w=30)
+    if sig_c: pdf.image(sig_c, x=135, y=sy + 7, w=30)
+    pdf.set_font("helvetica", 'BU', 9); pdf.set_xy(15, sy + 28); pdf.cell(90, 7, f"{d.get('Completed By')}", align='C')
+    pdf.set_xy(105, sy + 28); pdf.cell(90, 7, f"{d.get('Meet With')}", align='C')
     
-    if sig_t: pdf.image(sig_t, x=37, y=sy + 6, w=45) 
-    if sig_c: pdf.image(sig_c, x=127, y=sy + 6, w=45)
-    
-    pdf.set_font("helvetica", 'BU', 10); pdf.set_xy(15, sy + 35) 
-    pdf.cell(90, 7, f"{d.get('Completed By')}", align='C')
-    pdf.set_xy(105, sy + 35); pdf.cell(90, 7, f"{d.get('Meet With')}", align='C')
     return bytes(pdf.output())
 
-# --- 4. UI ---
+# --- 4. UI & MAIN LOGIC ---
 st.set_page_config(page_title="Finpac Service Report", layout="centered")
 client = get_gspread_client()
 
 st.title("Digital Service Report")
 
+# Sidebar
 uploaded_logo = st.sidebar.file_uploader("Ganti Logo", type=["png", "jpg"])
 uploaded_photos = st.sidebar.file_uploader("Photos", type=["png", "jpg"], accept_multiple_files=True)
 photo_caps = []
@@ -152,7 +135,7 @@ with st.form("main_form", clear_on_submit=False):
     c1, c2 = st.columns(2)
     with c1:
         cb = st.text_input("Completed By", key="cb_in")
-        cu = st.text_input("Customer", key="cu_in")
+        cu = st.text_input("Customer", value="PT. Finpac Anugerah Indonesia", key="cu_in")
         mw = st.text_input("Meet With", key="mw_in")
         status = st.selectbox("Status", ["Open", "Pending", "Closed"], key="st_in")
     with c2:
@@ -163,12 +146,10 @@ with st.form("main_form", clear_on_submit=False):
     pr, fu = st.text_area("Problem Description", key="pr_in"), st.text_area("Report Action", key="fu_in")
     st.write("---")
     s1, s2 = st.columns(2)
-    with s1:
-        st.write("Service Technician:")
-        ct = st_canvas(stroke_width=2, height=150, width=300, key="ct_can", background_color="#eee")
-    with s2:
-        st.write("Customer:")
-        cc = st_canvas(stroke_width=2, height=150, width=300, key="cc_can", background_color="#eee")
+    with s1: 
+        st.write("Technician Signature:"); ct = st_canvas(stroke_width=2, height=80, width=200, key="ct_can", background_color="#eee")
+    with s2: 
+        st.write("Customer Signature:"); cc = st_canvas(stroke_width=2, height=80, width=200, key="cc_can", background_color="#eee")
     
     if st.form_submit_button("1. Generate PDF"):
         if not cb: st.error("Nama Technician harus diisi")
@@ -176,20 +157,20 @@ with st.form("main_form", clear_on_submit=False):
             logo = optimize_image(uploaded_logo) if uploaded_logo else optimize_image("logo.png")
             final_p = [{'img': optimize_image(p), 'caption': photo_caps[idx] if idx < len(photo_caps) else ""} for idx, p in enumerate(uploaded_photos)]
             d_dict = {"Completed By": cb, "Customer": cu, "Meet With": mw, "Date": str(rd), "Machine": ma, "Type": ty, "Serial No": sn, "Problem": pr, "Follow Up": fu}
-            
-            # Tanda tangan transparan
-            sig_t = make_transparent(ct.image_data)
-            sig_c = make_transparent(cc.image_data)
+            sig_t = Image.fromarray(ct.image_data.astype('uint8'), 'RGBA') if ct.image_data is not None else None
+            sig_c = Image.fromarray(cc.image_data.astype('uint8'), 'RGBA') if cc.image_data is not None else None
             
             st.session_state['pdf'] = create_pdf(d_dict, sig_t, sig_c, logo, final_p)
             st.session_state['row_data'] = [str(rd), rd.strftime("%A"), cu, ma, ty, sn, pr, fu, cb, status]
             st.session_state['download_name'] = f"Report_{cu}_{str(rd)}.pdf"
-            st.success("✅ PDF Berhasil dibuat!")
+            st.success(f"✅ PDF '{st.session_state['download_name']}' Berhasil dibuat!")
 
-if 'pdf' in st.session_state:
+if 'pdf' in st.session_state and 'download_name' in st.session_state:
     st.write("---")
     st.download_button("⬇️ Download PDF", data=st.session_state['pdf'], file_name=st.session_state['download_name'])
+    
     manual_link = st.text_input("Masukkan Link GDrive PDF di sini:", key="manual_link_in")
+    
     if st.button("2. Simpan & Reset Form"):
         if not manual_link: st.warning("Masukkan link GDrive dahulu.")
         elif client:
@@ -201,8 +182,6 @@ if 'pdf' in st.session_state:
                 sheet.append_row(full_row, value_input_option='USER_ENTERED')
                 sheet.sort((1, 'asc'), range='A2:K2000')
                 st.success("✅ Data tersimpan! Mereset form...")
-                
-                # Pembersihan state untuk reset form
                 for key in list(st.session_state.keys()): del st.session_state[key]
                 st.rerun()
             except Exception as e: st.error(f"Gagal: {e}")
