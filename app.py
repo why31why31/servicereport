@@ -103,7 +103,6 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
             pdf.cell(cw, 5, f"Photo {i+1}: {clean_text(item['caption'][:40])}", align='C')
             pdf.set_y(row_y + rh + 8)
 
-    # --- TANDA TANGAN DI DASAR ---
     if pdf.get_y() > 220: pdf.add_page()
     pdf.set_y(240) 
     pdf.set_font("helvetica", 'B', 9); sy = pdf.get_y()
@@ -118,14 +117,14 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
 # --- 4. UI ---
 st.set_page_config(page_title="Finpac Service Report", layout="centered")
 
-# CSS: MENGHAPUS BATASAN LEBAR (Setel ke 100% dari kolom)
+# CSS: MEMAKSA BINGKAI DAN KANVAS MENJADI SATU KESATUAN
 st.markdown("""
     <style>
     iframe[title="streamlit_drawable_canvas.st_canvas"] {
         border: 1px solid #ddd !important;
         border-radius: 4px !important;
-        width: 100% !important; /* Mengikuti lebar layar */
-        height: 150px !important;
+        width: 100% !important; /* Biarkan mengikuti kolom */
+        height: 180px !important; /* Ditambah untuk ruang toolbar */
     }
     </style>
     """, unsafe_allow_html=True)
@@ -133,7 +132,6 @@ st.markdown("""
 client = get_gspread_client()
 st.title("Digital Service Report")
 
-# Sidebar
 uploaded_logo = st.sidebar.file_uploader("Ganti Logo", type=["png", "jpg"])
 uploaded_photos = st.sidebar.file_uploader("Photos", type=["png", "jpg"], accept_multiple_files=True)
 photo_caps = []
@@ -141,7 +139,6 @@ if uploaded_photos:
     for i, _ in enumerate(uploaded_photos):
         photo_caps.append(st.sidebar.text_input(f"Caption Foto {i+1}", key=f"cap_{i}"))
 
-# --- FORM DATA ---
 with st.form("main_form"):
     c1, c2 = st.columns(2)
     with c1:
@@ -157,29 +154,28 @@ with st.form("main_form"):
     pr, fu = st.text_area("Problem Description", key="pr_in"), st.text_area("Report Action", key="fu_in")
     st.form_submit_button("Lanjut ke Tanda Tangan")
 
-# --- AREA TANDA TANGAN (FULL WIDTH) ---
 st.write("---")
 st.write("### Tanda Tangan")
 
-# Satu baris satu tanda tangan agar area coretan maksimal
+# --- PERBAIKAN: WIDTH=NONE AGAR KANVAS PENUH KE KOTAK ---
 st.write("**Service Technician Signature:**")
 ct = st_canvas(
     stroke_width=2, 
     height=150, 
-    width=500, # Lebar internal besar agar resolusi bagus
+    width=None, # KUNCI: Biarkan None agar mengisi lebar 100% iframe
     key="ct_can", 
     background_color="rgba(0,0,0,0)", 
-    display_toolbar=True
+    display_toolbar=True # KUNCI: Memunculkan tombol hapus
 )
 
 st.write("**Customer Signature:**")
 cc = st_canvas(
     stroke_width=2, 
     height=150, 
-    width=500, # Lebar internal besar agar resolusi bagus
+    width=None, # KUNCI: Biarkan None agar mengisi lebar 100% iframe
     key="cc_can", 
     background_color="rgba(0,0,0,0)", 
-    display_toolbar=True
+    display_toolbar=True # KUNCI: Memunculkan tombol hapus
 )
 
 if st.button("1. Generate PDF Report", type="primary"):
