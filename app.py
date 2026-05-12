@@ -31,9 +31,8 @@ class PDF(FPDF):
     def header(self):
         if self.page_no() == 1:
             if self.logo_path and os.path.exists(self.logo_path):
-                # Ukuran logo disesuaikan, spasi y dikurangi agar tidak terlalu jauh
                 self.image(self.logo_path, x=70, y=8, w=70)
-                self.set_y(28) # Spasi kop diperpendek
+                self.set_y(28)
             else:
                 self.set_y(10)
             
@@ -42,14 +41,14 @@ class PDF(FPDF):
             self.set_font('helvetica', 'B', 14)
             self.cell(0, 10, "SERVICE REPORT", fill=True, align='C', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
             self.set_text_color(0, 0, 0)
-            self.ln(2) # Spasi setelah judul diperkecil
+            self.ln(2)
 
 def create_pdf(data, s_t, s_c, logo_path, photos):
     pdf = PDF(logo_path=logo_path)
     pdf.set_auto_page_break(auto=True, margin=20)
     pdf.add_page()
     
-    # Data Info
+    # Data Info Table
     pdf.set_font("helvetica", 'B', 9)
     pdf.set_fill_color(245, 245, 245)
     
@@ -79,7 +78,7 @@ def create_pdf(data, s_t, s_c, logo_path, photos):
     pdf.set_font("helvetica", '', 10)
     pdf.multi_cell(0, 6, data['fu'])
 
-    # Photos (Sejajar Kiri Kanan)
+    # Photos Section
     if photos:
         if pdf.get_y() > 180: pdf.add_page()
         pdf.ln(5)
@@ -108,8 +107,7 @@ def create_pdf(data, s_t, s_c, logo_path, photos):
                 y_fix += (img_h + 8)
                 pdf.set_y(y_fix)
 
-    # --- SIGNATURES (GRUP TERKUNCI) ---
-    # Jika sisa ruang < 55mm, paksa pindah halaman agar grup tidak pecah
+    # Signatures Group Lock
     if pdf.get_y() > 220:
         pdf.add_page()
     
@@ -141,18 +139,23 @@ with st.sidebar:
     photo_files = st.file_uploader("Upload Photos", type=["jpg", "png"], accept_multiple_files=True)
     caps = [st.text_input(f"Caption {i+1}", key=f"c_{i}") for i in range(len(photo_files))]
 
-col1, col2 = st.columns(2)
-with col1:
-    cb = st.text_input("Technician Name")
-    cu = st.text_input("Customer Name", value="PT. Finpac Anugerah Indonesia")
-    mw = st.text_input("Meet With")
-with col2:
-    rd = st.date_input("Date", value=date.today())
-    ma = st.text_input("Machine")
-    sn = st.text_input("Serial No")
-ty = st.text_input("Machine Type")
-pr = st.text_area("Problem Description")
-fu = st.text_area("Action Taken / Follow Up")
+# --- 1. INPUT STATUS MUNYUL KEMBALI ---
+with st.form("main_form"):
+    col1, col2 = st.columns(2)
+    with col1:
+        cb = st.text_input("Technician Name")
+        cu = st.text_input("Customer Name", value="PT. Finpac Anugerah Indonesia")
+        mw = st.text_input("Meet With")
+        status = st.selectbox("Status", ["Open", "Pending", "Closed"]) # Status is back
+    with col2:
+        rd = st.date_input("Date", value=date.today())
+        ma = st.text_input("Machine")
+        sn = st.text_input("Serial No")
+        ty = st.text_input("Machine Type")
+    
+    pr = st.text_area("Problem Description")
+    fu = st.text_area("Action Taken / Follow Up")
+    st.form_submit_button("Lock Data & Proceed to Signature")
 
 st.write("---")
 st.write("### Signatures")
@@ -161,7 +164,7 @@ can_c = st_canvas(stroke_width=2, height=150, width=400, key="c_sig", background
 
 if st.button("🚀 GENERATE PDF REPORT", type="primary", use_container_width=True):
     if not cb:
-        st.error("Nama Teknisi harus diisi!")
+        st.error("Technician Name is required!")
     else:
         logo_path = "logo.png" 
         report_photos = []
@@ -174,20 +177,40 @@ if st.button("🚀 GENERATE PDF REPORT", type="primary", use_container_width=Tru
         s_c = Image.fromarray(can_c.image_data.astype('uint8')) if can_c.image_data is not None else None
         
         bundle = {'cb':cb, 'cu':cu, 'mw':mw, 'rd':str(rd), 'ma':ma, 'ty':ty, 'sn':sn, 'pr':pr, 'fu':fu}
+        
+        # Simpan ke session state
         st.session_state['final_pdf'] = create_pdf(bundle, s_t, s_c, logo_path, report_photos)
-        st.session_state['row_data'] = [str(rd), cu, ma, ty, sn, pr, fu, cb]
-        st.success("PDF Berhasil Dibuat!")
+        # --- 2. HASIL SAVE SPREADSHEET DIURUTKAN ---
+        st.session_state['row_data'] = [str(rd), cu, ma, ty, sn, pr, fu, cb, status]
+        # Buat nama file PDF
+        st.session_state['pdf_filename'] = f"Report_{cu}_{rd}.pdf"
+        st.success("PDF Generated Successfully!")
 
-# Tombol Simpan & GDrive (Dipastikan muncul setelah PDF dibuat)
 if 'final_pdf' in st.session_state:
     st.write("---")
-    st.download_button("📥 DOWNLOAD PDF", data=st.session_state['final_pdf'], file_name=f"Report_{rd}.pdf", use_container_width=True)
+    st.download_button("📥 DOWNLOAD PDF", 
+                       data=st.session_state['final_pdf'], 
+                       file_name=st.session_state['pdf_filename'], 
+                       use_container_width=True)
     
-    g_link = st.text_input("Paste GDrive Link:")
+    g_link = st.text_input("Paste GDrive Link here:")
+    
     if st.button("💾 SAVE TO SPREADSHEET & RESET", use_container_width=True):
-        if client:
-            sheet = client.open(SHEET_NAME).sheet1
-            sheet.append_row(st.session_state['row_data'] + [g_link])
-            st.success("Data Tersimpan!")
-        for k in list(st.session_state.keys()): del st.session_state[k]
-        st.rerun()
+        if not g_link:
+            st.warning("Please paste the GDrive link first.")
+        elif client:
+            try:
+                sheet = client.open(SHEET_NAME).sheet1
+                # --- 3. GDRIVE LINK DI SAVE DENGAN NAMA FILE PDF ---
+                filename = st.session_state['pdf_filename']
+                hyperlink_formula = f'=HYPERLINK("{g_link}", "{filename}")'
+                
+                full_row = st.session_state['row_data'] + [hyperlink_formula]
+                sheet.append_row(full_row, value_input_option='USER_ENTERED')
+                
+                st.success("Data Saved to Spreadsheet!")
+                # Reset
+                for k in list(st.session_state.keys()): del st.session_state[k]
+                st.rerun()
+            except Exception as e:
+                st.error(f"Spreadsheet Error: {e}")
