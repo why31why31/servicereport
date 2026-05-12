@@ -103,25 +103,32 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
             pdf.cell(cw, 5, f"Photo {i+1}: {clean_text(item['caption'][:40])}", align='C')
             pdf.set_y(row_y + rh + 8)
 
-    # --- LOGIKA TANDA TANGAN (LOCK DI BAWAH & TRANSPARAN) ---
+    # --- LOGIKA TANDA TANGAN (POSISI TETAP DI BAWAH) ---
     if pdf.get_y() > 220: pdf.add_page()
     pdf.set_y(240) 
     pdf.set_font("helvetica", 'B', 9); sy = pdf.get_y()
     pdf.set_xy(15, sy); pdf.cell(90, 7, "Service Technician,", align='C')
     pdf.set_xy(105, sy); pdf.cell(90, 7, "Customer,", align='C')
+    # Image support transparency (RGBA)
     if sig_t: pdf.image(sig_t, x=45, y=sy + 7, w=30)
     if sig_c: pdf.image(sig_c, x=135, y=sy + 7, w=30)
     pdf.set_font("helvetica", 'BU', 9); pdf.set_xy(15, sy + 28); pdf.cell(90, 7, f"{d.get('Completed By')}", align='C')
     pdf.set_xy(105, sy + 28); pdf.cell(90, 7, f"{d.get('Meet With')}", align='C')
     return bytes(pdf.output())
 
-# --- 5. UI & LOGIC ---
+# --- 4. UI & LOGIC ---
 st.set_page_config(page_title="Finpac Service Report", layout="centered")
 
-# CSS Agar Canvas Transparan terlihat kotaknya
+# CSS: MEMPERBAIKI UKURAN KOTAK CANVAS AGAR PAS
 st.markdown("""
     <style>
-    iframe[title="streamlit_drawable_canvas.st_canvas"] { border: 1px solid #ddd !important; background-color: #fff !important; }
+    iframe[title="streamlit_drawable_canvas.st_canvas"] {
+        border: 1px solid #ddd !important;
+        border-radius: 4px !important;
+        width: 200px !important;
+        height: 80px !important;
+        background-color: #fff !important;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -139,7 +146,7 @@ with st.form("main_form", clear_on_submit=False):
     c1, c2 = st.columns(2)
     with c1:
         cb = st.text_input("Completed By", key="cb_in")
-        cu = st.text_input("Customer", key="cu_in")
+        cu = st.text_input("Customer", value="PT. Finpac Anugerah Indonesia", key="cu_in")
         mw = st.text_input("Meet With", key="mw_in")
         status = st.selectbox("Status", ["Open", "Pending", "Closed"], key="st_in")
     with c2:
@@ -150,9 +157,9 @@ with st.form("main_form", clear_on_submit=False):
     pr, fu = st.text_area("Problem Description", key="pr_in"), st.text_area("Report Action", key="fu_in")
     st.write("---")
     s1, s2 = st.columns(2)
-    # Background "rgba(0,0,0,0)" agar tidak ada kotak abu-abu di PDF
-    with s1: ct = st_canvas(stroke_width=2, height=80, width=200, key="ct_can", background_color="rgba(0,0,0,0)")
-    with s2: cc = st_canvas(stroke_width=2, height=80, width=200, key="cc_can", background_color="rgba(0,0,0,0)")
+    # Tanda tangan transparan dengan background rgba(0,0,0,0)
+    with s1: ct = st_canvas(stroke_width=2, height=80, width=200, key="ct_can", background_color="rgba(0,0,0,0)", display_toolbar=False, update_stoke=True)
+    with s2: cc = st_canvas(stroke_width=2, height=80, width=200, key="cc_can", background_color="rgba(0,0,0,0)", display_toolbar=False, update_stoke=True)
     
     if st.form_submit_button("1. Generate PDF"):
         if not cb: st.error("Nama Technician harus diisi")
