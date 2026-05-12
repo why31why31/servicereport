@@ -7,8 +7,28 @@ from PIL import Image
 import io
 import base64
 import os
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseUpload
 
-# --- 1. UTILS ---
+# --- 1. CONFIG & SETUP ---
+# Ambil ID dari URL folder Google Drive Anda
+FOLDER_ID = "MASUKKAN_ID_FOLDER_GDRIVE_DISINI" 
+SHEET_NAME = "Service Report Log"
+
+def get_gspread_client():
+    try:
+        if "gcp_service_account" in st.secrets:
+            creds_info = dict(st.secrets["gcp_service_account"])
+            scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+            creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_info, scope)
+            return gspread.authorize(creds), creds
+    except Exception as e:
+        st.sidebar.error(f"Koneksi API Gagal: {e}")
+    return None, None
+
+# --- 2. UTILS (Tetap Sesuai Kode Asli Anda) ---
 def clean_text(text):
     if not text: return ""
     replacements = {
@@ -28,15 +48,13 @@ def optimize_image(image_input, max_res=(500, 500)):
             else: return None
         else:
             img = Image.open(image_input)
-            
         if img.mode in ("RGBA", "P"): 
             img = img.convert("RGB")
         img.thumbnail(max_res, Image.Resampling.LANCZOS)
         return img
-    except:
-        return None
+    except: return None
 
-# --- 2. PDF CLASS ---
+# --- 3. PDF CLASS (Tetap Sesuai Kode Asli Anda) ---
 class PDF(FPDF):
     def __init__(self, logo_img=None):
         super().__init__()
@@ -58,12 +76,18 @@ class PDF(FPDF):
             self.set_text_color(0, 0, 0)
             self.ln(2)
 
-# --- 3. GENERATION FUNCTION ---
+# --- 4. GENERATION & CLOUD FUNCTIONS ---
+def upload_to_drive(pdf_bytes, filename, creds):
+    service = build('drive', 'v3', credentials=creds)
+    file_metadata = {'name': filename, 'parents': [FOLDER_ID]}
+    media = MediaIoBaseUpload(io.BytesIO(pdf_bytes), mimetype='application/pdf')
+    file = service.files().create(body=file_metadata, media_body=media, fields='id, webViewLink', supportsAllDrives=True).execute()
+    return file.get('webViewLink')
+
 def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
     pdf = PDF(logo_img=logo)
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
-    
     pdf.set_fill_color(240, 240, 240)
     h_row = 6.5
     d = {k: clean_text(str(v)) for k, v in data.items()}
@@ -72,23 +96,18 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
         pdf.set_font("helvetica", 'B', 8)
         pdf.cell(w_label - 3, h_row, f" {label}", border=0, fill=True)
         pdf.cell(3, h_row, ":", border=0, fill=True, align='C')
-        
         x_start, y_start = pdf.get_x(), pdf.get_y()
         pdf.set_font("helvetica", '', 8)
         pdf.cell(w_value, h_row, f" {value}", border=0)
-        
-        # Garis bawah ultra tipis (0.05mm) sejajar di sisi kanan
         pdf.set_line_width(0.05)
         pdf.line(x_start + 1, y_start + h_row - 1.2, x_start + w_value - 1, y_start + h_row - 1.2)
         if is_last: pdf.ln(h_row)
 
-    # Grid Informasi
+    # Grid Informasi Utama
     draw_aligned_cell("Technician", d.get('Completed By'), 25, 65)
     draw_aligned_cell("Date", d.get('Date'), 25, 65, is_last=True)
-    
     draw_aligned_cell("Customer", d.get('Customer'), 25, 65)
     draw_aligned_cell("Meet With", d.get('Meet With'), 25, 65, is_last=True)
-    
     draw_aligned_cell("Machine", d.get('Machine'), 25, 50)
     draw_aligned_cell("Type", d.get('Type'), 12, 40)
     draw_aligned_cell("Ser No", d.get('Serial No'), 18, 35, is_last=True)
@@ -107,14 +126,14 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
     pdf.multi_cell(0, 5, d.get('Follow Up'), border=0)
     pdf.ln(4)
 
+    # Bagian Lampiran Foto
     if extra_items:
         if pdf.get_y() > 210: pdf.add_page()
         pdf.set_font("helvetica", 'B', 10)
         pdf.cell(0, 8, "Attachments Pic", border='B', align='C', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         pdf.ln(3)
         cw, rh, gap = 85, 58, 10
-        m_x = (210 - (cw * 2 + gap)) / 2
-        row_y = pdf.get_y()
+        m_x, row_y = (210 - (cw * 2 + gap)) / 2, pdf.get_y()
         for i, item in enumerate(extra_items):
             if i > 0 and i % 4 == 0:
                 pdf.add_page()
@@ -133,6 +152,7 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
             pdf.cell(cw, 5, f"Photo {i+1}: {clean_text(item['caption'][:40])}", align='C')
             pdf.set_y(row_y + rh + 8)
 
+    # Bagian Tanda Tangan
     if pdf.get_y() > 240: pdf.add_page()
     pdf.ln(5)
     pdf.set_font("helvetica", 'B', 9)
@@ -152,10 +172,10 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
     pdf.cell(95, 7, f"{d.get('Meet With')}", align='C')
     return bytes(pdf.output())
 
-# --- 4. UI ---
+# --- 5. UI ---
 st.set_page_config(page_title="Finpac Service Report", layout="centered")
+client, creds = get_gspread_client()
 
-# DETEKSI LOGO OTOMATIS (FIX LOGO)
 LOCAL_LOGO_PATH = "logo.png" 
 default_logo = optimize_image(LOCAL_LOGO_PATH)
 
@@ -166,12 +186,12 @@ if st.sidebar.button("🔄 Clear App Cache"):
 
 st.title("Digital Service Report")
 
-# Tampilan Status Logo di Sidebar
 if default_logo:
     st.sidebar.success("✅ Logo otomatis (logo.png) terdeteksi")
 else:
     st.sidebar.warning("⚠️ logo.png tidak ditemukan di folder")
 
+# Opsi Sidebar Tetap Lengkap
 uploaded_logo = st.sidebar.file_uploader("Ganti Logo Manual", type=["png", "jpg", "jpeg"])
 uploaded_photos = st.sidebar.file_uploader("Photos", type=["png", "jpg", "jpeg"], accept_multiple_files=True)
 
@@ -186,6 +206,7 @@ with st.form("main"):
         cb = st.text_input("Completed By")
         cu = st.text_input("Customer", value="PT. Finpac Anugerah Indonesia")
         mw = st.text_input("Meet With")
+        status = st.selectbox("Status", ["Open", "Pending", "Closed"])
     with c2:
         rd = st.date_input("Date", value=date.today())
         ma = st.text_input("Machine")
@@ -196,29 +217,44 @@ with st.form("main"):
     s1, s2 = st.columns(2)
     with s1: 
         st.write("Technician Signature:")
-        ct = st_canvas(stroke_width=2, height=80, width=200, key="ct")
+        ct = st_canvas(stroke_width=2, height=80, width=200, key="ct", background_color="#eee")
     with s2: 
         st.write("Customer Signature:")
-        cc = st_canvas(stroke_width=2, height=80, width=200, key="cc")
+        cc = st_canvas(stroke_width=2, height=80, width=200, key="cc", background_color="#eee")
 
-    if st.form_submit_button("Generate Report"):
+    if st.form_submit_button("Generate & Simpan ke Cloud"):
         if not cb: st.error("Technician name required")
         else:
-            # Gunakan logo manual jika diupload, jika tidak gunakan logo otomatis
             final_logo = optimize_image(uploaded_logo) if uploaded_logo else default_logo
-            
             final_p = [{'img': optimize_image(p), 'caption': photo_caps[idx] if idx < len(photo_caps) else ""} for idx, p in enumerate(uploaded_photos)]
-            st.session_state.update({
-                'd': {"Completed By": cb, "Customer": cu, "Meet With": mw, "Date": str(rd), "Machine": ma, "Type": ty, "Serial No": sn, "Problem": pr, "Follow Up": fu}, 
-                'st': Image.fromarray(ct.image_data.astype('uint8'), 'RGBA') if ct.image_data is not None else None,
-                'sc': Image.fromarray(cc.image_data.astype('uint8'), 'RGBA') if cc.image_data is not None else None,
-                'l': final_logo, 'p': final_p
-            })
+            
+            # Data Mapping
+            d_dict = {"Completed By": cb, "Customer": cu, "Meet With": mw, "Date": str(rd), "Machine": ma, "Type": ty, "Serial No": sn, "Problem": pr, "Follow Up": fu}
+            
+            # Generate PDF
+            sig_t = Image.fromarray(ct.image_data.astype('uint8'), 'RGBA') if ct.image_data is not None else None
+            sig_c = Image.fromarray(cc.image_data.astype('uint8'), 'RGBA') if cc.image_data is not None else None
+            pdf_bytes = create_pdf(d_dict, sig_t, sig_c, final_logo, final_p)
+            
+            # Simpan ke Session State untuk Preview
+            st.session_state.update({'pdf': pdf_bytes, 'sn': sn, 'rd': rd, 'cu': cu, 'ma': ma, 'ty': ty, 'pr': pr, 'fu': fu, 'cb': cb, 'status': status})
+            
+            # PROSES CLOUD (Sheets & Drive)
+            if client:
+                try:
+                    # 1. Upload Drive
+                    link = upload_to_drive(pdf_bytes, f"Report_{sn}_{cu}.pdf", creds)
+                    # 2. Append Sheets
+                    sheet = client.open(SHEET_NAME).sheet1
+                    sheet.append_row([str(rd), rd.strftime("%A"), cu, ma, ty, sn, pr, fu, cb, status, link])
+                    st.success("✅ Berhasil: PDF di Drive & Data di Spreadsheet terupdate!")
+                except Exception as e:
+                    st.error(f"Gagal Simpan Cloud: {e}")
+            else:
+                st.warning("⚠️ Cloud tidak aktif (Credentials tidak ditemukan), PDF hanya dibuat lokal.")
 
-if 'd' in st.session_state:
+if 'pdf' in st.session_state:
     st.write("---")
-    output_pdf = create_pdf(st.session_state['d'], st.session_state['st'], st.session_state['sc'], st.session_state['l'], st.session_state['p'])
-    st.download_button("⬇️ Download PDF", data=output_pdf, file_name=f"Report_{st.session_state['d']['Serial No']}.pdf")
-    
-    base64_pdf = base64.b64encode(output_pdf).decode()
+    st.download_button("⬇️ Download PDF", data=st.session_state['pdf'], file_name=f"Report_{st.session_state['sn']}.pdf")
+    base64_pdf = base64.b64encode(st.session_state['pdf']).decode()
     st.markdown(f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="800"></iframe>', unsafe_allow_html=True)
