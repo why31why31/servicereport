@@ -92,7 +92,8 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
     if extra_items:
         if pdf.get_y() > 210: pdf.add_page()
         pdf.set_font("helvetica", 'B', 10); pdf.cell(0, 8, "Attachments Pic", border='B', align='C', new_x=XPos.LMARGIN, new_y=YPos.NEXT); pdf.ln(3)
-        cw, rh = 85, 58; m_x, row_y = (210 - (cw * 2 + 10)) / 2, pdf.get_y()
+        cw, rh = 85, 58; m_x = (210 - (cw * 2 + 10)) / 2
+        row_y = pdf.get_y()
         for i, item in enumerate(extra_items):
             if i > 0 and i % 4 == 0: pdf.add_page(); row_y = 25
             elif i > 0 and i % 2 == 0: row_y += rh + 12
@@ -100,6 +101,7 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
             pdf.set_draw_color(200, 200, 200); pdf.rect(x_p, row_y, cw, rh)
             pdf.image(item['img'], x=x_p+1, y=row_y+1, w=cw-2, h=rh-8)
             pdf.set_xy(x_p, row_y + rh - 5); pdf.set_font("helvetica", 'I', 7)
+            # BAGIAN CAPTION: Diambil dari item['caption']
             pdf.cell(cw, 5, f"Photo {i+1}: {clean_text(item['caption'][:40])}", align='C')
             pdf.set_y(row_y + rh + 8)
 
@@ -119,6 +121,18 @@ client = get_gspread_client()
 
 st.title("Digital Service Report")
 
+# Input Logo & Foto di Sidebar
+uploaded_logo = st.sidebar.file_uploader("Ganti Logo", type=["png", "jpg"])
+uploaded_photos = st.sidebar.file_uploader("Photos", type=["png", "jpg"], accept_multiple_files=True)
+
+photo_caps = []
+if uploaded_photos:
+    st.sidebar.write("---")
+    st.sidebar.subheader("Foto Captions")
+    for i, _ in enumerate(uploaded_photos):
+        cap = st.sidebar.text_input(f"Caption Foto {i+1}", key=f"cap_{i}")
+        photo_caps.append(cap)
+
 with st.form("main"):
     c1, c2 = st.columns(2)
     with c1:
@@ -137,15 +151,18 @@ with st.form("main"):
     with s1: ct = st_canvas(stroke_width=2, height=80, width=200, key="ct", background_color="#eee")
     with s2: cc = st_canvas(stroke_width=2, height=80, width=200, key="cc", background_color="#eee")
     
-    # Upload logo manual & Foto tetap ada di Sidebar
-    uploaded_logo = st.sidebar.file_uploader("Ganti Logo", type=["png", "jpg"])
-    uploaded_photos = st.sidebar.file_uploader("Photos", type=["png", "jpg"], accept_multiple_files=True)
-    
     if st.form_submit_button("1. Generate PDF"):
         if not cb: st.error("Nama Technician harus diisi")
         else:
             logo = optimize_image(uploaded_logo) if uploaded_logo else optimize_image("logo.png")
-            final_p = [{'img': optimize_image(p), 'caption': ""} for p in uploaded_photos]
+            
+            # Memasukkan caption ke dalam list foto
+            final_p = []
+            for idx, p in enumerate(uploaded_photos):
+                img_opt = optimize_image(p)
+                caption_text = photo_caps[idx] if idx < len(photo_caps) else ""
+                final_p.append({'img': img_opt, 'caption': caption_text})
+            
             d_dict = {"Completed By": cb, "Customer": cu, "Meet With": mw, "Date": str(rd), "Machine": ma, "Type": ty, "Serial No": sn, "Problem": pr, "Follow Up": fu}
             
             sig_t = Image.fromarray(ct.image_data.astype('uint8'), 'RGBA') if ct.image_data is not None else None
@@ -153,7 +170,7 @@ with st.form("main"):
             
             st.session_state['pdf'] = create_pdf(d_dict, sig_t, sig_c, logo, final_p)
             st.session_state['row_data'] = [str(rd), rd.strftime("%A"), cu, ma, ty, sn, pr, fu, cb, status]
-            st.success("✅ PDF Berhasil dibuat! Silakan download dan upload ke GDrive.")
+            st.success("✅ PDF Berhasil dibuat dengan lampiran!")
 
 if 'pdf' in st.session_state:
     st.write("---")
@@ -164,14 +181,14 @@ if 'pdf' in st.session_state:
     
     if st.button("2. Simpan Data ke Spreadsheet Online"):
         if not manual_link:
-            st.warning("Masukkan link GDrive terlebih dahulu agar data lengkap.")
+            st.warning("Masukkan link GDrive terlebih dahulu.")
         elif client:
             try:
                 sheet = client.open(SHEET_NAME).sheet1
                 full_row = st.session_state['row_data'] + [manual_link]
                 sheet.append_row(full_row)
-                sheet.sort((1, 'asc'), range='A2:K2000') # Urutkan otomatis
-                st.success("✅ Data dan Link GDrive berhasil tersimpan di Spreadsheet!")
+                sheet.sort((1, 'asc'), range='A2:K2000')
+                st.success("✅ Data dan Link GDrive berhasil tersimpan!")
             except Exception as e:
                 st.error(f"Gagal simpan ke Spreadsheet: {e}")
 
