@@ -21,7 +21,7 @@ def get_gspread_client():
             creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_info, scope)
             return gspread.authorize(creds)
     except Exception as e:
-        st.sidebar.error(f"Koneksi API Gagal: {e}")
+        st.sidebar.error(f"API Connection Failed: {e}")
     return None
 
 # --- 2. UTILS ---
@@ -117,14 +117,13 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
 # --- 4. UI ---
 st.set_page_config(page_title="Finpac Service Report", layout="centered")
 
-# CSS: MEMAKSA BINGKAI DAN KANVAS MENJADI SATU KESATUAN
 st.markdown("""
     <style>
     iframe[title="streamlit_drawable_canvas.st_canvas"] {
         border: 1px solid #ddd !important;
         border-radius: 4px !important;
-        width: 100% !important; /* Biarkan mengikuti kolom */
-        height: 180px !important; /* Ditambah untuk ruang toolbar */
+        width: 100% !important;
+        height: 180px !important;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -132,18 +131,20 @@ st.markdown("""
 client = get_gspread_client()
 st.title("Digital Service Report")
 
-uploaded_logo = st.sidebar.file_uploader("Ganti Logo", type=["png", "jpg"])
-uploaded_photos = st.sidebar.file_uploader("Photos", type=["png", "jpg"], accept_multiple_files=True)
+# Sidebar
+uploaded_logo = st.sidebar.file_uploader("Change Logo", type=["png", "jpg"])
+uploaded_photos = st.sidebar.file_uploader("Upload Photos", type=["png", "jpg"], accept_multiple_files=True)
 photo_caps = []
 if uploaded_photos:
     for i, _ in enumerate(uploaded_photos):
-        photo_caps.append(st.sidebar.text_input(f"Caption Foto {i+1}", key=f"cap_{i}"))
+        photo_caps.append(st.sidebar.text_input(f"Photo {i+1} Caption", key=f"cap_{i}"))
 
+# --- DATA FORM ---
 with st.form("main_form"):
     c1, c2 = st.columns(2)
     with c1:
         cb = st.text_input("Completed By", key="cb_in")
-        cu = st.text_input("Customer", value="PT. Finpac Anugerah Indonesia", key="cu_in")
+        cu = st.text_input("Customer", key="cu_in")
         mw = st.text_input("Meet With", key="mw_in")
         status = st.selectbox("Status", ["Open", "Pending", "Closed"], key="st_in")
     with c2:
@@ -151,36 +152,35 @@ with st.form("main_form"):
         ma = st.text_input("Machine", key="ma_in")
         ty = st.text_input("Type", key="ty_in")
         sn = st.text_input("Serial No", key="sn_in")
-    pr, fu = st.text_area("Problem Description", key="pr_in"), st.text_area("Report Action", key="fu_in")
-    st.form_submit_button("Lanjut ke Tanda Tangan")
+    pr, fu = st.text_area("Problem Description", key="pr_in"), st.text_area("Report Action / Follow Up", key="fu_in")
+    st.form_submit_button("Proceed to Signature")
 
 st.write("---")
-st.write("### Tanda Tangan")
+st.write("### Signatures")
 
-# --- PERBAIKAN: WIDTH=NONE AGAR KANVAS PENUH KE KOTAK ---
 st.write("**Service Technician Signature:**")
 ct = st_canvas(
     stroke_width=2, 
     height=150, 
-    width=None, # KUNCI: Biarkan None agar mengisi lebar 100% iframe
+    width=None, 
     key="ct_can", 
     background_color="rgba(0,0,0,0)", 
-    display_toolbar=True # KUNCI: Memunculkan tombol hapus
+    display_toolbar=True
 )
 
 st.write("**Customer Signature:**")
 cc = st_canvas(
     stroke_width=2, 
     height=150, 
-    width=None, # KUNCI: Biarkan None agar mengisi lebar 100% iframe
+    width=None, 
     key="cc_can", 
     background_color="rgba(0,0,0,0)", 
-    display_toolbar=True # KUNCI: Memunculkan tombol hapus
+    display_toolbar=True
 )
 
 if st.button("1. Generate PDF Report", type="primary"):
     if not cb:
-        st.error("Isi data form di atas dahulu.")
+        st.error("Please fill in the form and click 'Proceed to Signature' first.")
     else:
         logo = optimize_image(uploaded_logo) if uploaded_logo else optimize_image("logo.png")
         final_p = [{'img': optimize_image(p), 'caption': photo_caps[idx] if idx < len(photo_caps) else ""} for idx, p in enumerate(uploaded_photos)]
@@ -192,15 +192,15 @@ if st.button("1. Generate PDF Report", type="primary"):
         st.session_state['pdf'] = create_pdf(d_dict, sig_t, sig_c, logo, final_p)
         st.session_state['row_data'] = [str(rd), rd.strftime("%A"), cu, ma, ty, sn, pr, fu, cb, status]
         st.session_state['download_name'] = f"Report_{cu}_{str(rd)}.pdf"
-        st.success("✅ PDF Berhasil dibuat!")
+        st.success("✅ PDF Successfully Generated!")
 
 if 'pdf' in st.session_state:
     st.write("---")
     st.download_button("⬇️ Download PDF", data=st.session_state['pdf'], file_name=st.session_state['download_name'])
-    manual_link = st.text_input("Masukkan Link GDrive PDF di sini:", key="manual_link_in")
+    manual_link = st.text_input("Enter GDrive PDF Link here:", key="manual_link_in")
     
-    if st.button("2. Simpan & Reset Form"):
-        if not manual_link: st.warning("Masukkan link GDrive.")
+    if st.button("2. Save Data & Reset Form"):
+        if not manual_link: st.warning("Please provide the GDrive link first.")
         elif client:
             try:
                 sheet = client.open(SHEET_NAME).sheet1
@@ -209,7 +209,7 @@ if 'pdf' in st.session_state:
                 full_row = st.session_state['row_data'] + [link_formula]
                 sheet.append_row(full_row, value_input_option='USER_ENTERED')
                 sheet.sort((1, 'asc'), range='A2:K2000')
-                st.success("✅ Data tersimpan!")
+                st.success("✅ Data Saved!")
                 for key in list(st.session_state.keys()): del st.session_state[key]
                 st.rerun()
-            except Exception as e: st.error(f"Gagal: {e}")
+            except Exception as e: st.error(f"Error: {e}")
