@@ -103,7 +103,7 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
             pdf.cell(cw, 5, f"Photo {i+1}: {clean_text(item['caption'][:40])}", align='C')
             pdf.set_y(row_y + rh + 8)
 
-    # --- LOCK Tanda Tangan di Dasar ---
+    # --- TANDA TANGAN DI DASAR ---
     if pdf.get_y() > 220: pdf.add_page()
     pdf.set_y(240) 
     pdf.set_font("helvetica", 'B', 9); sy = pdf.get_y()
@@ -116,16 +116,16 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
     return bytes(pdf.output())
 
 # --- 4. UI ---
-st.set_page_config(page_title="Finpac Service Report", layout="wide")
+st.set_page_config(page_title="Finpac Service Report", layout="centered")
 
-# CSS: PENYAMAAAN UKURAN FRAME DAN CANVAS (350px x 120px)
+# CSS: MENGHAPUS BATASAN LEBAR (Setel ke 100% dari kolom)
 st.markdown("""
     <style>
     iframe[title="streamlit_drawable_canvas.st_canvas"] {
         border: 1px solid #ddd !important;
         border-radius: 4px !important;
-        width: 350px !important;
-        height: 120px !important;
+        width: 100% !important; /* Mengikuti lebar layar */
+        height: 150px !important;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -133,6 +133,7 @@ st.markdown("""
 client = get_gspread_client()
 st.title("Digital Service Report")
 
+# Sidebar
 uploaded_logo = st.sidebar.file_uploader("Ganti Logo", type=["png", "jpg"])
 uploaded_photos = st.sidebar.file_uploader("Photos", type=["png", "jpg"], accept_multiple_files=True)
 photo_caps = []
@@ -140,6 +141,7 @@ if uploaded_photos:
     for i, _ in enumerate(uploaded_photos):
         photo_caps.append(st.sidebar.text_input(f"Caption Foto {i+1}", key=f"cap_{i}"))
 
+# --- FORM DATA ---
 with st.form("main_form"):
     c1, c2 = st.columns(2)
     with c1:
@@ -155,37 +157,39 @@ with st.form("main_form"):
     pr, fu = st.text_area("Problem Description", key="pr_in"), st.text_area("Report Action", key="fu_in")
     st.form_submit_button("Lanjut ke Tanda Tangan")
 
-# --- BAGIAN TANDA TANGAN (SINKRONISASI UKURAN) ---
+# --- AREA TANDA TANGAN (FULL WIDTH) ---
 st.write("---")
-s1, s2 = st.columns(2)
-with s1:
-    st.write("Technician Signature:")
-    ct = st_canvas(
-        stroke_width=2, 
-        height=120,      # Harus sama dengan CSS
-        width=350,       # Harus sama dengan CSS
-        key="ct_can", 
-        background_color="rgba(0,0,0,0)", 
-        display_toolbar=True
-    )
-with s2:
-    st.write("Customer Signature:")
-    cc = st_canvas(
-        stroke_width=2, 
-        height=120,      # Harus sama dengan CSS
-        width=350,       # Harus sama dengan CSS
-        key="cc_can", 
-        background_color="rgba(0,0,0,0)", 
-        display_toolbar=True
-    )
+st.write("### Tanda Tangan")
+
+# Satu baris satu tanda tangan agar area coretan maksimal
+st.write("**Service Technician Signature:**")
+ct = st_canvas(
+    stroke_width=2, 
+    height=150, 
+    width=500, # Lebar internal besar agar resolusi bagus
+    key="ct_can", 
+    background_color="rgba(0,0,0,0)", 
+    display_toolbar=True
+)
+
+st.write("**Customer Signature:**")
+cc = st_canvas(
+    stroke_width=2, 
+    height=150, 
+    width=500, # Lebar internal besar agar resolusi bagus
+    key="cc_can", 
+    background_color="rgba(0,0,0,0)", 
+    display_toolbar=True
+)
 
 if st.button("1. Generate PDF Report", type="primary"):
     if not cb:
-        st.error("Isi data di atas dahulu.")
+        st.error("Isi data form di atas dahulu.")
     else:
         logo = optimize_image(uploaded_logo) if uploaded_logo else optimize_image("logo.png")
         final_p = [{'img': optimize_image(p), 'caption': photo_caps[idx] if idx < len(photo_caps) else ""} for idx, p in enumerate(uploaded_photos)]
         d_dict = {"Completed By": cb, "Customer": cu, "Meet With": mw, "Date": str(rd), "Machine": ma, "Type": ty, "Serial No": sn, "Problem": pr, "Follow Up": fu}
+        
         sig_t = Image.fromarray(ct.image_data.astype('uint8'), 'RGBA') if ct.image_data is not None else None
         sig_c = Image.fromarray(cc.image_data.astype('uint8'), 'RGBA') if cc.image_data is not None else None
         
