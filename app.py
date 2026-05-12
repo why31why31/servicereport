@@ -9,12 +9,9 @@ import base64
 import os
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaIoBaseUpload
 
 # --- 1. CONFIG & CLOUD SETUP ---
 SHEET_NAME = "Service Report Log" 
-FOLDER_ID = "1CODLFKhki8SUL4Ijr7XaqE-x9tQjb6ev" 
 
 def get_gspread_client():
     try:
@@ -22,52 +19,28 @@ def get_gspread_client():
             creds_info = dict(st.secrets["gcp_service_account"])
             scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
             creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_info, scope)
-            return gspread.authorize(creds), creds
+            return gspread.authorize(creds)
     except Exception as e:
         st.sidebar.error(f"Koneksi API Gagal: {e}")
-    return None, None
+    return None
 
 # --- 2. UTILS ---
 def clean_text(text):
     if not text: return ""
-    replacements = {
-        '\u2013': '-', '\u2014': '-', '\u2018': "'", '\u2019': "'", 
-        '\u201c': '"', '\u201d': '"', '\u2022': '*', '\xb0': ' deg '
-    }
-    for search, replace in replacements.items():
-        text = text.replace(search, replace)
+    replacements = {'\u2013': '-', '\u2014': '-', '\u2018': "'", '\u2019': "'", '\xb0': ' deg '}
+    for s, r in replacements.items(): text = text.replace(s, r)
     return text.encode('latin-1', 'ignore').decode('latin-1')
 
 def optimize_image(image_input, max_res=(500, 500)):
     if image_input is None: return None
     try:
-        if isinstance(image_input, str):
-            if os.path.exists(image_input):
-                img = Image.open(image_input)
-            else: return None
-        else:
-            img = Image.open(image_input)
-        if img.mode in ("RGBA", "P"): 
-            img = img.convert("RGB")
+        img = Image.open(image_input)
+        if img.mode in ("RGBA", "P"): img = img.convert("RGB")
         img.thumbnail(max_res, Image.Resampling.LANCZOS)
         return img
     except: return None
 
-# --- 3. CLOUD FUNCTIONS ---
-def upload_to_drive(pdf_bytes, filename, creds):
-    service = build('drive', 'v3', credentials=creds)
-    file_metadata = {'name': filename, 'parents': [FOLDER_ID]}
-    media = MediaIoBaseUpload(io.BytesIO(pdf_bytes), mimetype='application/pdf', resumable=True)
-    file = service.files().create(body=file_metadata, media_body=media, fields='id, webViewLink', supportsAllDrives=True).execute()
-    return file.get('webViewLink')
-
-def sort_spreadsheet_by_date(client, sheet_name):
-    try:
-        sheet = client.open(sheet_name).sheet1
-        sheet.sort((1, 'asc'), range='A2:K1000')
-    except: pass
-
-# --- 4. PDF CLASS (Desain Anda yang sudah OK) ---
+# --- 3. PDF CLASS ---
 class PDF(FPDF):
     def __init__(self, logo_img=None):
         super().__init__()
@@ -75,70 +48,55 @@ class PDF(FPDF):
         self.set_margin(15)
 
     def header(self):
-        if self.page_no() == 1:
-            if self.logo_img:
-                w_orig, h_orig = self.logo_img.size
-                logo_h = 18
-                logo_w = (w_orig / h_orig) * logo_h
-                self.image(self.logo_img, x=(210 - logo_w) / 2, y=8, h=logo_h)
-                self.ln(logo_h + 2)
-            self.set_fill_color(41, 128, 185)
-            self.set_text_color(255, 255, 255)
+        if self.page_no() == 1 and self.logo_img:
+            w_orig, h_orig = self.logo_img.size
+            logo_h = 18
+            logo_w = (w_orig / h_orig) * logo_h
+            self.image(self.logo_img, x=(210 - logo_w) / 2, y=8, h=logo_h)
+            self.ln(logo_h + 2)
+            self.set_fill_color(41, 128, 185); self.set_text_color(255, 255, 255)
             self.set_font('helvetica', 'B', 14)
             self.cell(0, 10, "SERVICE REPORT", fill=True, align='C', border=0, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-            self.set_text_color(0, 0, 0)
-            self.ln(2)
+            self.set_text_color(0, 0, 0); self.ln(2)
 
 def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
     pdf = PDF(logo_img=logo)
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
-    pdf.set_fill_color(240, 240, 240)
-    h_row = 6.5
+    pdf.set_fill_color(240, 240, 240); h_row = 6.5
     d = {k: clean_text(str(v)) for k, v in data.items()}
 
-    def draw_aligned_cell(label, value, w_label, w_value, is_last=False):
+    def draw_aligned_cell(label, value, wl, wv, last=False):
         pdf.set_font("helvetica", 'B', 8)
-        pdf.cell(w_label - 3, h_row, f" {label}", border=0, fill=True)
+        pdf.cell(wl - 3, h_row, f" {label}", border=0, fill=True)
         pdf.cell(3, h_row, ":", border=0, fill=True, align='C')
-        x_start, y_start = pdf.get_x(), pdf.get_y()
-        pdf.set_font("helvetica", '', 8)
-        pdf.cell(w_value, h_row, f" {value}", border=0)
-        pdf.set_line_width(0.05)
-        pdf.line(x_start + 1, y_start + h_row - 1.2, x_start + w_value - 1, y_start + h_row - 1.2)
-        if is_last: pdf.ln(h_row)
+        x, y = pdf.get_x(), pdf.get_y()
+        pdf.set_font("helvetica", '', 8); pdf.cell(wv, h_row, f" {value}")
+        pdf.set_line_width(0.05); pdf.line(x + 1, y + h_row - 1.2, x + wv - 1, y + h_row - 1.2)
+        if last: pdf.ln(h_row)
 
-    # Grid Info
     draw_aligned_cell("Technician", d.get('Completed By'), 25, 65)
-    draw_aligned_cell("Date", d.get('Date'), 25, 65, is_last=True)
+    draw_aligned_cell("Date", d.get('Date'), 25, 65, last=True)
     draw_aligned_cell("Customer", d.get('Customer'), 25, 65)
-    draw_aligned_cell("Meet With", d.get('Meet With'), 25, 65, is_last=True)
+    draw_aligned_cell("Meet With", d.get('Meet With'), 25, 65, last=True)
     draw_aligned_cell("Machine", d.get('Machine'), 25, 50)
     draw_aligned_cell("Type", d.get('Type'), 12, 40)
-    draw_aligned_cell("Ser No", d.get('Serial No'), 18, 35, is_last=True)
+    draw_aligned_cell("Ser No", d.get('Serial No'), 18, 35, last=True)
     
-    pdf.ln(4)
-    pdf.set_draw_color(41, 128, 185); pdf.set_font("helvetica", 'B', 10)
+    pdf.ln(4); pdf.set_draw_color(41, 128, 185); pdf.set_font("helvetica", 'B', 10)
     pdf.cell(0, 7, "PROBLEM DESCRIPTION", border='B', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-    pdf.set_font("helvetica", '', 9)
-    pdf.multi_cell(0, 5, d.get('Problem'), border=0); pdf.ln(2)
-    
-    pdf.set_font("helvetica", 'B', 10)
+    pdf.set_font("helvetica", '', 9); pdf.multi_cell(0, 5, d.get('Problem')); pdf.ln(2)
     pdf.cell(0, 7, "REPORT / FOLLOW UP ACTION", border='B', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-    pdf.set_font("helvetica", '', 9)
-    pdf.multi_cell(0, 5, d.get('Follow Up'), border=0); pdf.ln(4)
+    pdf.multi_cell(0, 5, d.get('Follow Up')); pdf.ln(4)
 
     if extra_items:
         if pdf.get_y() > 210: pdf.add_page()
-        pdf.set_font("helvetica", 'B', 10)
-        pdf.cell(0, 8, "Attachments Pic", border='B', align='C', new_x=XPos.LMARGIN, new_y=YPos.NEXT); pdf.ln(3)
-        cw, rh, gap = 85, 58, 10
-        m_x, row_y = (210 - (cw * 2 + gap)) / 2, pdf.get_y()
+        pdf.set_font("helvetica", 'B', 10); pdf.cell(0, 8, "Attachments Pic", border='B', align='C', new_x=XPos.LMARGIN, new_y=YPos.NEXT); pdf.ln(3)
+        cw, rh = 85, 58; m_x, row_y = (210 - (cw * 2 + 10)) / 2, pdf.get_y()
         for i, item in enumerate(extra_items):
             if i > 0 and i % 4 == 0: pdf.add_page(); row_y = 25
             elif i > 0 and i % 2 == 0: row_y += rh + 12
-            if row_y + rh > 280: pdf.add_page(); row_y = 25
-            col = i % 2; x_p = m_x + (col * (cw + gap))
+            col = i % 2; x_p = m_x + (col * (cw + 10))
             pdf.set_draw_color(200, 200, 200); pdf.rect(x_p, row_y, cw, rh)
             pdf.image(item['img'], x=x_p+1, y=row_y+1, w=cw-2, h=rh-8)
             pdf.set_xy(x_p, row_y + rh - 5); pdf.set_font("helvetica", 'I', 7)
@@ -146,36 +104,20 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
             pdf.set_y(row_y + rh + 8)
 
     if pdf.get_y() > 240: pdf.add_page()
-    pdf.ln(5); pdf.set_font("helvetica", 'B', 9); sig_y = pdf.get_y()
-    pdf.set_xy(10, sig_y); pdf.cell(95, 7, "Service Technician,", align='C')
-    pdf.set_xy(105, sig_y); pdf.cell(95, 7, "Customer,", align='C')
-    if sig_t: pdf.image(sig_t, x=45, y=sig_y+8, w=25)
-    if sig_c: pdf.image(sig_c, x=140, y=sig_y+8, w=25)
-    pdf.set_font("helvetica", 'BU', 9); pdf.set_xy(10, sig_y+26)
-    pdf.cell(95, 7, f"{d.get('Completed By')}", align='C')
-    pdf.set_xy(105, sig_y+26)
-    pdf.cell(95, 7, f"{d.get('Meet With')}", align='C')
+    pdf.ln(5); pdf.set_font("helvetica", 'B', 9); sy = pdf.get_y()
+    pdf.set_xy(10, sy); pdf.cell(95, 7, "Service Technician,", align='C')
+    pdf.set_xy(105, sy); pdf.cell(95, 7, "Customer,", align='C')
+    if sig_t: pdf.image(sig_t, x=45, y=sy+8, w=25)
+    if sig_c: pdf.image(sig_c, x=140, y=sy+8, w=25)
+    pdf.set_font("helvetica", 'BU', 9); pdf.set_xy(10, sy+26); pdf.cell(95, 7, f"{d.get('Completed By')}", align='C')
+    pdf.set_xy(105, sy+26); pdf.cell(95, 7, f"{d.get('Meet With')}", align='C')
     return bytes(pdf.output())
 
-# --- 5. UI ---
+# --- 4. UI & LOGIC ---
 st.set_page_config(page_title="Finpac Service Report", layout="centered")
-client, creds = get_gspread_client()
-
-LOCAL_LOGO_PATH = "logo.png" 
-default_logo = optimize_image(LOCAL_LOGO_PATH)
-
-if st.sidebar.button("🔄 Clear App Cache"):
-    st.cache_data.clear(); st.session_state.clear(); st.rerun()
+client = get_gspread_client()
 
 st.title("Digital Service Report")
-
-uploaded_logo = st.sidebar.file_uploader("Ganti Logo Manual", type=["png", "jpg", "jpeg"])
-uploaded_photos = st.sidebar.file_uploader("Photos", type=["png", "jpg", "jpeg"], accept_multiple_files=True)
-
-photo_caps = []
-if uploaded_photos:
-    for i, _ in enumerate(uploaded_photos):
-        photo_caps.append(st.sidebar.text_input(f"Caption {i+1}", key=f"cap_{i}"))
 
 with st.form("main"):
     c1, c2 = st.columns(2)
@@ -192,41 +134,47 @@ with st.form("main"):
     pr, fu = st.text_area("Problem Description"), st.text_area("Report Action")
     st.write("---")
     s1, s2 = st.columns(2)
-    with s1: 
-        st.write("Technician Signature:"); ct = st_canvas(stroke_width=2, height=80, width=200, key="ct", background_color="#eee")
-    with s2: 
-        st.write("Customer Signature:"); cc = st_canvas(stroke_width=2, height=80, width=200, key="cc", background_color="#eee")
-
-    if st.form_submit_button("Generate & Simpan Cloud"):
+    with s1: ct = st_canvas(stroke_width=2, height=80, width=200, key="ct", background_color="#eee")
+    with s2: cc = st_canvas(stroke_width=2, height=80, width=200, key="cc", background_color="#eee")
+    
+    # Upload logo manual & Foto tetap ada di Sidebar
+    uploaded_logo = st.sidebar.file_uploader("Ganti Logo", type=["png", "jpg"])
+    uploaded_photos = st.sidebar.file_uploader("Photos", type=["png", "jpg"], accept_multiple_files=True)
+    
+    if st.form_submit_button("1. Generate PDF"):
         if not cb: st.error("Nama Technician harus diisi")
         else:
-            final_logo = optimize_image(uploaded_logo) if uploaded_logo else default_logo
-            final_p = [{'img': optimize_image(p), 'caption': photo_caps[idx] if idx < len(photo_caps) else ""} for idx, p in enumerate(uploaded_photos)]
+            logo = optimize_image(uploaded_logo) if uploaded_logo else optimize_image("logo.png")
+            final_p = [{'img': optimize_image(p), 'caption': ""} for p in uploaded_photos]
             d_dict = {"Completed By": cb, "Customer": cu, "Meet With": mw, "Date": str(rd), "Machine": ma, "Type": ty, "Serial No": sn, "Problem": pr, "Follow Up": fu}
             
             sig_t = Image.fromarray(ct.image_data.astype('uint8'), 'RGBA') if ct.image_data is not None else None
             sig_c = Image.fromarray(cc.image_data.astype('uint8'), 'RGBA') if cc.image_data is not None else None
-            pdf_bytes = create_pdf(d_dict, sig_t, sig_c, final_logo, final_p)
             
-            link_gdrive = "Upload Manual"
-            if client:
-                try:
-                    link_gdrive = upload_to_drive(pdf_bytes, f"Report_{sn}_{cu}.pdf", creds)
-                    st.success("✅ PDF Berhasil diunggah ke Drive")
-                except: st.error("⚠️ Drive Gagal (Kuota)")
-
-                try:
-                    sheet = client.open(SHEET_NAME).sheet1
-                    new_row = [str(rd), rd.strftime("%A"), cu, ma, ty, sn, pr, fu, cb, status, link_gdrive]
-                    sheet.append_row(new_row)
-                    sort_spreadsheet_by_date(client, SHEET_NAME)
-                    st.success("✅ Data Berhasil masuk ke Spreadsheet")
-                except Exception as e: st.error(f"❌ Spreadsheet Gagal: {e}")
-            
-            st.session_state.update({'pdf': pdf_bytes, 'sn': sn})
+            st.session_state['pdf'] = create_pdf(d_dict, sig_t, sig_c, logo, final_p)
+            st.session_state['row_data'] = [str(rd), rd.strftime("%A"), cu, ma, ty, sn, pr, fu, cb, status]
+            st.success("✅ PDF Berhasil dibuat! Silakan download dan upload ke GDrive.")
 
 if 'pdf' in st.session_state:
     st.write("---")
-    st.download_button("⬇️ Download PDF", data=st.session_state['pdf'], file_name=f"Report_{st.session_state['sn']}.pdf")
+    st.download_button("⬇️ Download PDF ke HP/Laptop", data=st.session_state['pdf'], file_name=f"Report_{st.session_state['row_data'][5]}.pdf")
+    
+    st.info("Setelah download, upload file ke Google Drive Anda, lalu salin Link-nya di bawah ini:")
+    manual_link = st.text_input("Masukkan Link GDrive PDF di sini:")
+    
+    if st.button("2. Simpan Data ke Spreadsheet Online"):
+        if not manual_link:
+            st.warning("Masukkan link GDrive terlebih dahulu agar data lengkap.")
+        elif client:
+            try:
+                sheet = client.open(SHEET_NAME).sheet1
+                full_row = st.session_state['row_data'] + [manual_link]
+                sheet.append_row(full_row)
+                sheet.sort((1, 'asc'), range='A2:K2000') # Urutkan otomatis
+                st.success("✅ Data dan Link GDrive berhasil tersimpan di Spreadsheet!")
+            except Exception as e:
+                st.error(f"Gagal simpan ke Spreadsheet: {e}")
+
+    # Preview PDF
     base64_pdf = base64.b64encode(st.session_state['pdf']).decode()
     st.markdown(f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="800"></iframe>', unsafe_allow_html=True)
