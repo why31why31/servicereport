@@ -14,7 +14,7 @@ from googleapiclient.http import MediaIoBaseUpload
 
 # --- 1. CONFIG & CLOUD SETUP ---
 SHEET_NAME = "Service Report Log" 
-FOLDER_ID = "1CODLFKhki8SUL4Ijr7XaqE-x9tQjb6ev" # <-- GANTI INI DENGAN ID FOLDER ANDA
+FOLDER_ID = "1CODLFKhki8SUL4Ijr7XaqE-x9tQjb6ev" 
 
 def get_gspread_client():
     try:
@@ -53,35 +53,22 @@ def optimize_image(image_input, max_res=(500, 500)):
         return img
     except: return None
 
-# --- 3. PDF CLASS ---
-class PDF(FPDF):
-    def __init__(self, logo_img=None):
-        super().__init__()
-        self.logo_img = logo_img
-        self.set_margin(15)
-
-    def header(self):
-        if self.page_no() == 1:
-            if self.logo_img:
-                w_orig, h_orig = self.logo_img.size
-                logo_h = 18
-                logo_w = (w_orig / h_orig) * logo_h
-                self.image(self.logo_img, x=(210 - logo_w) / 2, y=8, h=logo_h)
-                self.ln(logo_h + 2)
-            self.set_fill_color(41, 128, 185)
-            self.set_text_color(255, 255, 255)
-            self.set_font('helvetica', 'B', 14)
-            self.cell(0, 10, "SERVICE REPORT", fill=True, align='C', border=0, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-            self.set_text_color(0, 0, 0)
-            self.ln(2)
-
-# --- 4. CORE FUNCTIONS ---
+# --- 3. CORE FUNCTIONS ---
 def upload_to_drive(pdf_bytes, filename, creds):
     service = build('drive', 'v3', credentials=creds)
     file_metadata = {'name': filename, 'parents': [FOLDER_ID]}
     media = MediaIoBaseUpload(io.BytesIO(pdf_bytes), mimetype='application/pdf', resumable=True)
     file = service.files().create(body=file_metadata, media_body=media, fields='id, webViewLink', supportsAllDrives=True).execute()
     return file.get('webViewLink')
+
+def sort_spreadsheet_by_date(client, sheet_name):
+    """Mengurutkan spreadsheet berdasarkan kolom A (Tanggal) secara ascending"""
+    try:
+        sheet = client.open(sheet_name).sheet1
+        # 1 adalah kolom A, 'asc' adalah dari yang terlama ke terbaru
+        sheet.sort((1, 'asc'))
+    except Exception as e:
+        st.sidebar.warning(f"Otomatis urut tanggal gagal: {e}")
 
 def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
     pdf = PDF(logo_img=logo)
@@ -111,36 +98,24 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
     draw_aligned_cell("Ser No", d.get('Serial No'), 18, 35, is_last=True)
     
     pdf.ln(4)
-    pdf.set_draw_color(41, 128, 185)
-    pdf.set_font("helvetica", 'B', 10)
+    pdf.set_draw_color(41, 128, 185); pdf.set_font("helvetica", 'B', 10)
     pdf.cell(0, 7, "PROBLEM DESCRIPTION", border='B', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.set_font("helvetica", '', 9)
-    pdf.multi_cell(0, 5, d.get('Problem'), border=0)
-    pdf.ln(2)
+    pdf.multi_cell(0, 5, d.get('Problem'), border=0); pdf.ln(2)
     
-    pdf.set_font("helvetica", 'B', 10)
     pdf.cell(0, 7, "REPORT / FOLLOW UP ACTION", border='B', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-    pdf.set_font("helvetica", '', 9)
-    pdf.multi_cell(0, 5, d.get('Follow Up'), border=0)
-    pdf.ln(4)
+    pdf.multi_cell(0, 5, d.get('Follow Up'), border=0); pdf.ln(4)
 
     if extra_items:
         if pdf.get_y() > 210: pdf.add_page()
         pdf.set_font("helvetica", 'B', 10)
-        pdf.cell(0, 8, "Attachments Pic", border='B', align='C', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-        pdf.ln(3)
+        pdf.cell(0, 8, "Attachments Pic", border='B', align='C', new_x=XPos.LMARGIN, new_y=YPos.NEXT); pdf.ln(3)
         cw, rh, gap = 85, 58, 10
         m_x, row_y = (210 - (cw * 2 + gap)) / 2, pdf.get_y()
         for i, item in enumerate(extra_items):
-            if i > 0 and i % 4 == 0:
-                pdf.add_page()
-                row_y = 25
+            if i > 0 and i % 4 == 0: pdf.add_page(); row_y = 25
             elif i > 0 and i % 2 == 0: row_y += rh + 12
-            if row_y + rh > 280:
-                pdf.add_page()
-                row_y = 25
-            col = i % 2
-            x_p = m_x + (col * (cw + gap))
+            col = i % 2; x_p = m_x + (col * (cw + gap))
             pdf.set_draw_color(200, 200, 200); pdf.rect(x_p, row_y, cw, rh)
             pdf.image(item['img'], x=x_p+1, y=row_y+1, w=cw-2, h=rh-8)
             pdf.set_xy(x_p, row_y + rh - 5); pdf.set_font("helvetica", 'I', 7)
@@ -159,6 +134,25 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
     pdf.cell(95, 7, f"{d.get('Meet With')}", align='C')
     return bytes(pdf.output())
 
+# --- 4. PDF CLASS ---
+class PDF(FPDF):
+    def __init__(self, logo_img=None):
+        super().__init__()
+        self.logo_img = logo_img
+        self.set_margin(15)
+
+    def header(self):
+        if self.page_no() == 1 and self.logo_img:
+            w_orig, h_orig = self.logo_img.size
+            logo_h = 18
+            logo_w = (w_orig / h_orig) * logo_h
+            self.image(self.logo_img, x=(210 - logo_w) / 2, y=8, h=logo_h)
+            self.ln(logo_h + 2)
+            self.set_fill_color(41, 128, 185); self.set_text_color(255, 255, 255)
+            self.set_font('helvetica', 'B', 14)
+            self.cell(0, 10, "SERVICE REPORT", fill=True, align='C', border=0, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+            self.set_text_color(0, 0, 0); self.ln(2)
+
 # --- 5. UI ---
 st.set_page_config(page_title="Finpac Service Report", layout="centered")
 client, creds = get_gspread_client()
@@ -170,11 +164,6 @@ if st.sidebar.button("🔄 Clear App Cache"):
     st.cache_data.clear(); st.session_state.clear(); st.rerun()
 
 st.title("Digital Service Report")
-
-if default_logo:
-    st.sidebar.success("✅ Logo otomatis terdeteksi")
-else:
-    st.sidebar.warning("⚠️ logo.png tidak ditemukan")
 
 uploaded_logo = st.sidebar.file_uploader("Ganti Logo Manual", type=["png", "jpg", "jpeg"])
 uploaded_photos = st.sidebar.file_uploader("Photos", type=["png", "jpg", "jpeg"], accept_multiple_files=True)
@@ -211,30 +200,27 @@ with st.form("main"):
             final_p = [{'img': optimize_image(p), 'caption': photo_caps[idx] if idx < len(photo_caps) else ""} for idx, p in enumerate(uploaded_photos)]
             d_dict = {"Completed By": cb, "Customer": cu, "Meet With": mw, "Date": str(rd), "Machine": ma, "Type": ty, "Serial No": sn, "Problem": pr, "Follow Up": fu}
             
-            # Generate PDF Lokal
             sig_t = Image.fromarray(ct.image_data.astype('uint8'), 'RGBA') if ct.image_data is not None else None
             sig_c = Image.fromarray(cc.image_data.astype('uint8'), 'RGBA') if cc.image_data is not None else None
             pdf_bytes = create_pdf(d_dict, sig_t, sig_c, final_logo, final_p)
             
-            link_gdrive = "Upload Gagal/Manual"
-            
-            # PROSES CLOUD
+            link_gdrive = "Upload Manual"
             if client:
-                # A. Drive Upload
                 try:
                     link_gdrive = upload_to_drive(pdf_bytes, f"Report_{sn}_{cu}.pdf", creds)
-                    st.success("✅ PDF Berhasil di Drive")
-                except Exception as e:
-                    st.error(f"⚠️ Gagal Upload Drive (Kuota): {e}")
+                    st.success("✅ PDF Terunggah ke Drive")
+                except: st.error("⚠️ Drive Gagal (Kuota)")
 
-                # B. Spreadsheet Append
                 try:
                     sheet = client.open(SHEET_NAME).sheet1
                     new_row = [str(rd), rd.strftime("%A"), cu, ma, ty, sn, pr, fu, cb, status, link_gdrive]
                     sheet.append_row(new_row)
-                    st.success("✅ Data Teks Berhasil di Spreadsheet Online")
-                except Exception as e:
-                    st.error(f"❌ Spreadsheet Gagal: {e}")
+                    
+                    # PROSES URUTKAN TANGGAL OTOMATIS
+                    sort_spreadsheet_by_date(client, SHEET_NAME)
+                    
+                    st.success("✅ Data Berhasil Dicatat & Diurutkan")
+                except Exception as e: st.error(f"❌ Spreadsheet Gagal: {e}")
             
             st.session_state.update({'pdf': pdf_bytes, 'sn': sn})
 
