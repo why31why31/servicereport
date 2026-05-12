@@ -92,7 +92,7 @@ def create_pdf(data, s_t, s_c, logo_path, photos):
     pdf.cell(90, 7, "Service Technician,", align='C'); pdf.cell(90, 7, "Customer,", align='C')
     if s_t: pdf.image(s_t, x=45, y=curr_y + 8, w=30)
     if s_c: pdf.image(s_c, x=135, y=curr_y + 8, w=30)
-    pdf.set_y(curr_y + 35); pdf.set_font("helvetica", 'BU', 10)
+    pdf.set_y(curr_y + 25); pdf.set_font("helvetica", 'BU', 10)
     pdf.cell(90, 7, data['cb'], align='C'); pdf.cell(90, 7, data['mw'], align='C')
     return bytes(pdf.output())
 
@@ -112,7 +112,7 @@ with st.form("main_form"):
     col1, col2 = st.columns(2)
     with col1:
         cb = st.text_input("Technician Name")
-        cu = st.text_input("Customer Name", value="PT. Finpac Anugerah Indonesia")
+        cu = st.text_input("Customer Name")
         mw = st.text_input("Meet With")
         status = st.selectbox("Status", ["Open", "Pending", "Closed"])
     with col2:
