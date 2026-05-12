@@ -15,7 +15,7 @@ from googleapiclient.http import MediaIoBaseUpload
 # --- 1. CONFIG & API SETUP ---
 # Pastikan Anda sudah memasukkan data JSON ke Streamlit Secrets Dashboard
 SHEET_NAME = "Service Report Log" # Nama Google Sheets Anda
-FOLDER_ID = "1jynQRbM_O2t3nuAJ0kyreLeBCgOjMnbdGCWVfDVdofI" # Ganti dengan ID folder GDrive Anda
+FOLDER_ID = "1CODLFKhki8SUL4Ijr7XaqE-x9tQjb6ev" # Ganti dengan ID folder GDrive Anda
 
 def get_gspread_client():
     try:
