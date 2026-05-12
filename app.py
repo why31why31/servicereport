@@ -108,22 +108,24 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
     pdf.set_font("helvetica", 'B', 9); sy = pdf.get_y()
     pdf.set_xy(15, sy); pdf.cell(90, 7, "Service Technician,", align='C')
     pdf.set_xy(105, sy); pdf.cell(90, 7, "Customer,", align='C')
-    if sig_t: pdf.image(sig_t, x=45, y=sy + 7, w=30)
-    if sig_c: pdf.image(sig_c, x=135, y=sy + 7, w=30)
+    # Tanda tangan di PDF tetap ukuran proporsional (w=35)
+    if sig_t: pdf.image(sig_t, x=43, y=sy + 7, w=35)
+    if sig_c: pdf.image(sig_c, x=133, y=sy + 7, w=35)
     pdf.set_font("helvetica", 'BU', 9); pdf.set_xy(15, sy + 28); pdf.cell(90, 7, f"{d.get('Completed By')}", align='C')
     pdf.set_xy(105, sy + 28); pdf.cell(90, 7, f"{d.get('Meet With')}", align='C')
     return bytes(pdf.output())
 
 # --- 4. UI ---
-st.set_page_config(page_title="Finpac Service Report", layout="centered")
+st.set_page_config(page_title="Finpac Service Report", layout="wide") # Ubah ke wide agar nyaman
 
+# CSS: LEBAR CANVAS DITINGKATKAN KE 300px
 st.markdown("""
     <style>
     iframe[title="streamlit_drawable_canvas.st_canvas"] {
         border: 1px solid #ddd !important;
         border-radius: 4px !important;
-        width: 200px !important;
-        height: 110px !important; /* Tinggi ditambah sedikit untuk ruang toolbar */
+        width: 300px !important;
+        height: 120px !important;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -138,12 +140,11 @@ if uploaded_photos:
     for i, _ in enumerate(uploaded_photos):
         photo_caps.append(st.sidebar.text_input(f"Caption Foto {i+1}", key=f"cap_{i}"))
 
-# --- BAGIAN FORM ---
 with st.form("main_form"):
     c1, c2 = st.columns(2)
     with c1:
         cb = st.text_input("Completed By", key="cb_in")
-        cu = st.text_input("Customer", value="PT. Finpac Anugerah Indonesia", key="cu_in")
+        cu = st.text_input("Customer", key="cu_in")
         mw = st.text_input("Meet With", key="mw_in")
         status = st.selectbox("Status", ["Open", "Pending", "Closed"], key="st_in")
     with c2:
@@ -154,28 +155,28 @@ with st.form("main_form"):
     pr, fu = st.text_area("Problem Description", key="pr_in"), st.text_area("Report Action", key="fu_in")
     st.form_submit_button("Lanjut ke Tanda Tangan")
 
-# --- BAGIAN TANDA TANGAN (Toolbar dikembalikan) ---
+# --- BAGIAN TANDA TANGAN (LEBAR 300px) ---
 st.write("---")
 s1, s2 = st.columns(2)
 with s1:
     st.write("Technician Signature:")
     ct = st_canvas(
         stroke_width=2, 
-        height=80, 
-        width=200, 
+        height=100, 
+        width=300,  # Lebar ditambah
         key="ct_can", 
         background_color="rgba(0,0,0,0)", 
-        display_toolbar=True  # Mengaktifkan tombol hapus/tong sampah
+        display_toolbar=True
     )
 with s2:
     st.write("Customer Signature:")
     cc = st_canvas(
         stroke_width=2, 
-        height=80, 
-        width=200, 
+        height=100, 
+        width=300,  # Lebar ditambah
         key="cc_can", 
         background_color="rgba(0,0,0,0)", 
-        display_toolbar=True  # Mengaktifkan tombol hapus/tong sampah
+        display_toolbar=True
     )
 
 if st.button("1. Generate PDF Report", type="primary"):
