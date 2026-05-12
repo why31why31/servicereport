@@ -135,7 +135,7 @@ with st.form("main_form", clear_on_submit=False):
     c1, c2 = st.columns(2)
     with c1:
         cb = st.text_input("Completed By", key="cb_in")
-        cu = st.text_input("Customer", value="PT. Finpac Anugerah Indonesia", key="cu_in")
+        cu = st.text_input("Customer", key="cu_in")
         mw = st.text_input("Meet With", key="mw_in")
         status = st.selectbox("Status", ["Open", "Pending", "Closed"], key="st_in")
     with c2:
