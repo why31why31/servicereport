@@ -101,7 +101,6 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
             pdf.set_draw_color(200, 200, 200); pdf.rect(x_p, row_y, cw, rh)
             pdf.image(item['img'], x=x_p+1, y=row_y+1, w=cw-2, h=rh-8)
             pdf.set_xy(x_p, row_y + rh - 5); pdf.set_font("helvetica", 'I', 7)
-            # BAGIAN CAPTION: Diambil dari item['caption']
             pdf.cell(cw, 5, f"Photo {i+1}: {clean_text(item['caption'][:40])}", align='C')
             pdf.set_y(row_y + rh + 8)
 
@@ -133,11 +132,11 @@ if uploaded_photos:
         cap = st.sidebar.text_input(f"Caption Foto {i+1}", key=f"cap_{i}")
         photo_caps.append(cap)
 
-with st.form("main"):
+with st.form("main", clear_on_submit=False):
     c1, c2 = st.columns(2)
     with c1:
         cb = st.text_input("Completed By")
-        cu = st.text_input("Customer")
+        cu = st.text_input("Customer", value="PT. Finpac Anugerah Indonesia")
         mw = st.text_input("Meet With")
         status = st.selectbox("Status", ["Open", "Pending", "Closed"])
     with c2:
@@ -148,15 +147,17 @@ with st.form("main"):
     pr, fu = st.text_area("Problem Description"), st.text_area("Report Action")
     st.write("---")
     s1, s2 = st.columns(2)
-    with s1: ct = st_canvas(stroke_width=2, height=80, width=200, key="ct", background_color="#eee")
-    with s2: cc = st_canvas(stroke_width=2, height=80, width=200, key="cc", background_color="#eee")
+    with s1: 
+        st.write("Technician Signature:")
+        ct = st_canvas(stroke_width=2, height=80, width=200, key="ct", background_color="#eee")
+    with s2: 
+        st.write("Customer Signature:")
+        cc = st_canvas(stroke_width=2, height=80, width=200, key="cc", background_color="#eee")
     
     if st.form_submit_button("1. Generate PDF"):
         if not cb: st.error("Nama Technician harus diisi")
         else:
             logo = optimize_image(uploaded_logo) if uploaded_logo else optimize_image("logo.png")
-            
-            # Memasukkan caption ke dalam list foto
             final_p = []
             for idx, p in enumerate(uploaded_photos):
                 img_opt = optimize_image(p)
@@ -170,16 +171,23 @@ with st.form("main"):
             
             st.session_state['pdf'] = create_pdf(d_dict, sig_t, sig_c, logo, final_p)
             st.session_state['row_data'] = [str(rd), rd.strftime("%A"), cu, ma, ty, sn, pr, fu, cb, status]
-            st.success("✅ PDF Berhasil dibuat dengan lampiran!")
+            # Set Nama File: Customer + Tanggal
+            st.session_state['download_name'] = f"Report_{cu}_{str(rd)}.pdf"
+            st.success(f"✅ PDF '{st.session_state['download_name']}' Berhasil dibuat!")
 
 if 'pdf' in st.session_state:
     st.write("---")
-    st.download_button("⬇️ Download PDF ke HP/Laptop", data=st.session_state['pdf'], file_name=f"Report_{st.session_state['row_data'][5]}.pdf")
+    # Menggunakan nama file dinamis
+    st.download_button(
+        "⬇️ Download PDF ke HP/Laptop", 
+        data=st.session_state['pdf'], 
+        file_name=st.session_state['download_name']
+    )
     
-    st.info("Setelah download, upload file ke Google Drive Anda, lalu salin Link-nya di bawah ini:")
+    st.info("Setelah download, upload file ke Drive, lalu masukkan link-nya:")
     manual_link = st.text_input("Masukkan Link GDrive PDF di sini:")
     
-    if st.button("2. Simpan Data ke Spreadsheet Online"):
+    if st.button("2. Simpan Data ke Spreadsheet & Reset Form"):
         if not manual_link:
             st.warning("Masukkan link GDrive terlebih dahulu.")
         elif client:
@@ -188,10 +196,12 @@ if 'pdf' in st.session_state:
                 full_row = st.session_state['row_data'] + [manual_link]
                 sheet.append_row(full_row)
                 sheet.sort((1, 'asc'), range='A2:K2000')
-                st.success("✅ Data dan Link GDrive berhasil tersimpan!")
+                st.success("✅ Data tersimpan! Mengosongkan form...")
+                
+                # Reset semua state dan rerun untuk mengosongkan form
+                for key in list(st.session_state.keys()):
+                    del st.session_state[key]
+                st.rerun()
+                
             except Exception as e:
-                st.error(f"Gagal simpan ke Spreadsheet: {e}")
-
-    # Preview PDF
-    base64_pdf = base64.b64encode(st.session_state['pdf']).decode()
-    st.markdown(f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="800"></iframe>', unsafe_allow_html=True)
+                st.error(f"Gagal simpan: {e}")
