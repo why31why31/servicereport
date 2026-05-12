@@ -158,12 +158,33 @@ with st.form("main_form"):
 # --- BAGIAN TANDA TANGAN (Di Luar Form) ---
 st.write("---")
 s1, s2 = st.columns(2)
+# CARI BAGIAN INI DAN GANTI (Sekitar baris 163 & 165)
+
 with s1:
     st.write("Technician Signature:")
-    ct = st_canvas(stroke_width=2, height=80, width=200, key="ct_can", background_color="rgba(0,0,0,0)", display_toolbar=False, update_stroke=True)
+    # Pastikan tulisannya update_stroke (DENGAN HURUF R)
+    ct = st_canvas(
+        stroke_width=2, 
+        height=80, 
+        width=200, 
+        key="ct_can", 
+        background_color="rgba(0,0,0,0)", 
+        display_toolbar=False, 
+        update_stroke=True  # <-- Perbaikan di sini
+    )
+
 with s2:
     st.write("Customer Signature:")
-    cc = st_canvas(stroke_width=2, height=80, width=200, key="cc_can", background_color="rgba(0,0,0,0)", display_toolbar=False, update_stroke=True)
+    # Pastikan tulisannya update_stroke (DENGAN HURUF R)
+    cc = st_canvas(
+        stroke_width=2, 
+        height=80, 
+        width=200, 
+        key="cc_can", 
+        background_color="rgba(0,0,0,0)", 
+        display_toolbar=False, 
+        update_stroke=True  # <-- Perbaikan di sini
+    )
 
 # Tombol Generate PDF Utama
 if st.button("1. Generate PDF Report", type="primary"):
