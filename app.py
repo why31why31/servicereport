@@ -175,9 +175,11 @@ with st.form("main", clear_on_submit=False):
             st.session_state['download_name'] = f"Report_{cu}_{str(rd)}.pdf"
             st.success(f"✅ PDF '{st.session_state['download_name']}' Berhasil dibuat!")
 
-if 'pdf' in st.session_state:
+# GANTI BAGIAN AKHIR KODE ANDA DENGAN INI:
+
+if 'pdf' in st.session_state and 'download_name' in st.session_state:
     st.write("---")
-    # Menggunakan nama file dinamis
+    # Tombol Download hanya muncul jika 'pdf' dan 'download_name' ada di memori
     st.download_button(
         "⬇️ Download PDF ke HP/Laptop", 
         data=st.session_state['pdf'], 
@@ -185,7 +187,8 @@ if 'pdf' in st.session_state:
     )
     
     st.info("Setelah download, upload file ke Drive, lalu masukkan link-nya:")
-    manual_link = st.text_input("Masukkan Link GDrive PDF di sini:")
+    # Gunakan key unik agar tidak hilang saat mengetik
+    manual_link = st.text_input("Masukkan Link GDrive PDF di sini:", key="input_link_manual")
     
     if st.button("2. Simpan Data ke Spreadsheet & Reset Form"):
         if not manual_link:
@@ -193,15 +196,20 @@ if 'pdf' in st.session_state:
         elif client:
             try:
                 sheet = client.open(SHEET_NAME).sheet1
-                full_row = st.session_state['row_data'] + [manual_link]
-                sheet.append_row(full_row)
-                sheet.sort((1, 'asc'), range='A2:K2000')
-                st.success("✅ Data tersimpan! Mengosongkan form...")
-                
-                # Reset semua state dan rerun untuk mengosongkan form
-                for key in list(st.session_state.keys()):
-                    del st.session_state[key]
-                st.rerun()
-                
+                # Pastikan row_data juga ada
+                if 'row_data' in st.session_state:
+                    full_row = st.session_state['row_data'] + [manual_link]
+                    sheet.append_row(full_row)
+                    sheet.sort((1, 'asc'), range='A2:K2000')
+                    st.success("✅ Data tersimpan! Mengosongkan form...")
+                    
+                    # Hapus data sesi satu per satu agar bersih
+                    for key in list(st.session_state.keys()):
+                        del st.session_state[key]
+                    
+                    # Rerun untuk mengosongkan form sepenuhnya
+                    st.rerun()
+                else:
+                    st.error("Data tidak ditemukan. Silakan Generate PDF ulang.")
             except Exception as e:
                 st.error(f"Gagal simpan: {e}")
