@@ -79,9 +79,27 @@ class PDF(FPDF):
 # --- 4. GENERATION & CLOUD FUNCTIONS ---
 def upload_to_drive(pdf_bytes, filename, creds):
     service = build('drive', 'v3', credentials=creds)
-    file_metadata = {'name': filename, 'parents': [FOLDER_ID]}
-    media = MediaIoBaseUpload(io.BytesIO(pdf_bytes), mimetype='application/pdf')
-    file = service.files().create(body=file_metadata, media_body=media, fields='id, webViewLink', supportsAllDrives=True).execute()
+    
+    # Metadata file
+    file_metadata = {
+        'name': filename,
+        'parents': [FOLDER_ID] # Pastikan FOLDER_ID ini adalah ID folder milik Anda
+    }
+    
+    media = MediaIoBaseUpload(
+        io.BytesIO(pdf_bytes), 
+        mimetype='application/pdf', 
+        resumable=True
+    )
+    
+    # Bagian krusial: mendukung Drive bersama dan memaksa penggunaan kuota pemilik folder
+    file = service.files().create(
+        body=file_metadata,
+        media_body=media,
+        fields='id, webViewLink',
+        supportsAllDrives=True # Mengizinkan Service Account menulis ke folder luar
+    ).execute()
+    
     return file.get('webViewLink')
 
 def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
