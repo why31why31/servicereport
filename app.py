@@ -40,27 +40,7 @@ def optimize_image(image_input, max_res=(500, 500)):
         return img
     except: return None
 
-# --- 3. RESET FUNCTION ---
-def reset_all_fields():
-    # Daftar semua key yang digunakan di widget
-    keys_to_reset = [
-        'cb_in', 'cu_in', 'mw_in', 'st_in', 'rd_in', 
-        'ma_in', 'ty_in', 'sn_in', 'pr_in', 'fu_in', 
-        'manual_link_in'
-    ]
-    for k in keys_to_reset:
-        if k in st.session_state:
-            if k == 'cu_in': st.session_state[k] = "PT. Finpac Anugerah Indonesia"
-            elif k == 'st_in': st.session_state[k] = "Open"
-            elif k == 'rd_in': st.session_state[k] = date.today()
-            else: st.session_state[k] = ""
-    
-    # Hapus data PDF dan canvas
-    if 'pdf' in st.session_state: del st.session_state['pdf']
-    if 'row_data' in st.session_state: del st.session_state['row_data']
-    if 'download_name' in st.session_state: del st.session_state['download_name']
-
-# --- 4. PDF CLASS ---
+# --- 3. PDF CLASS ---
 class PDF(FPDF):
     def __init__(self, logo_img=None):
         super().__init__()
@@ -133,7 +113,7 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
     pdf.set_xy(105, sy+26); pdf.cell(95, 7, f"{d.get('Meet With')}", align='C')
     return bytes(pdf.output())
 
-# --- 5. UI ---
+# --- 4. UI & MAIN LOGIC ---
 st.set_page_config(page_title="Finpac Service Report", layout="centered")
 client = get_gspread_client()
 
@@ -147,8 +127,8 @@ if uploaded_photos:
     for i, _ in enumerate(uploaded_photos):
         photo_caps.append(st.sidebar.text_input(f"Caption Foto {i+1}", key=f"cap_{i}"))
 
-# Main Form
-with st.form("main_form"):
+# Main Form - Menggunakan clear_on_submit=False tapi kita reset manual lewat session_state
+with st.form("main_form", clear_on_submit=False):
     c1, c2 = st.columns(2)
     with c1:
         cb = st.text_input("Completed By", key="cb_in")
@@ -184,25 +164,35 @@ with st.form("main_form"):
             st.session_state['download_name'] = f"Report_{cu}_{str(rd)}.pdf"
             st.success("✅ PDF Berhasil dibuat!")
 
-if 'pdf' in st.session_state and 'download_name' in st.session_state:
+# Bagian di luar Form (Muncul setelah Generate PDF)
+if 'pdf' in st.session_state:
     st.write("---")
     st.download_button("⬇️ Download PDF", data=st.session_state['pdf'], file_name=st.session_state['download_name'])
     
     manual_link = st.text_input("Masukkan Link GDrive PDF di sini:", key="manual_link_in")
     
     if st.button("2. Simpan & Reset Form"):
-        if not manual_link: st.warning("Masukkan link GDrive dahulu.")
+        if not manual_link: 
+            st.warning("Masukkan link GDrive dahulu.")
         elif client:
             try:
                 sheet = client.open(SHEET_NAME).sheet1
-                # Formula Hyperlink: Nama Customer (Tanggal)
+                # Formula Hyperlink
                 display_name = f"{st.session_state['row_data'][2]} ({st.session_state['row_data'][0]})"
                 link_formula = f'=HYPERLINK("{manual_link}", "{display_name}")'
                 
                 full_row = st.session_state['row_data'] + [link_formula]
                 sheet.append_row(full_row, value_input_option='USER_ENTERED')
                 sheet.sort((1, 'asc'), range='A2:K2000')
-                st.success("✅ Data tersimpan!")
-                reset_all_fields()
-                st.rerun()
-            except Exception as e: st.error(f"Gagal: {e}")
+                
+                st.success("✅ Data tersimpan! Mereset form...")
+                
+                # RESET TOTAL TANPA ERROR: 
+                # Kita hapus semua data di session_state lalu paksa rerun
+                for key in list(st.session_state.keys()):
+                    del st.session_state[key]
+                
+                st.rerun() # Ini akan membersihkan form secara otomatis
+                
+            except Exception as e: 
+                st.error(f"Gagal: {e}")
