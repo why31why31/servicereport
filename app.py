@@ -29,14 +29,13 @@ class PDF(FPDF):
         self.set_margin(15)
 
     def header(self):
-        # Header otomatis muncul jika file logo.png ada di folder
         if self.page_no() == 1:
             if self.logo_path and os.path.exists(self.logo_path):
-                # Menempatkan logo di tengah atas
-                self.image(self.logo_path, x=80, y=10, w=50)
-                self.set_y(35)
+                # KOP DIBUAT LEBIH BESAR (w=70)
+                self.image(self.logo_path, x=70, y=10, w=70)
+                self.ln(35) # Memberi ruang setelah logo
             else:
-                self.set_y(15)
+                self.ln(10)
             
             self.set_fill_color(41, 128, 185)
             self.set_text_color(255, 255, 255)
@@ -47,13 +46,14 @@ class PDF(FPDF):
 
 def create_pdf(data, s_t, s_c, logo_path, photos):
     pdf = PDF(logo_path=logo_path)
-    pdf.set_auto_page_break(auto=True, margin=20)
+    pdf.set_auto_page_break(auto=True, margin=25)
     pdf.add_page()
     
-    # Grid Data Detail
+    # Data Grid
     pdf.set_font("helvetica", 'B', 9)
     pdf.set_fill_color(245, 245, 245)
     
+    # Baris data teknis
     fields = [
         [("Technician", data['cb']), ("Date", data['rd'])],
         [("Customer", data['cu']), ("Contact", data['mw'])],
@@ -80,47 +80,59 @@ def create_pdf(data, s_t, s_c, logo_path, photos):
     pdf.set_font("helvetica", '', 10)
     pdf.multi_cell(0, 6, data['fu'])
 
-    # Photos Section (Sejajar & Rapi)
+    # Photos Section (FIXED SEJAJAR KIRI KANAN)
     if photos:
         if pdf.get_y() > 180: pdf.add_page()
         pdf.ln(10)
         pdf.set_font("helvetica", 'B', 10)
-        pdf.cell(0, 8, "ATTACHMENTS", border='B', align='C', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        pdf.cell(0, 8, "ATTACHMENTS / DOCUMENTATION", border='B', align='C', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         pdf.ln(5)
         
         img_w, img_h = 85, 60
+        y_anchor = pdf.get_y() # Mengunci posisi Y untuk baris foto yang sama
+
         for i, p in enumerate(photos):
-            if i % 2 == 0 and (pdf.get_y() + img_h + 15) > 275:
+            col = i % 2
+            # Pindah halaman jika ruang tidak cukup untuk baris baru
+            if col == 0 and (y_anchor + img_h + 15) > 275:
                 pdf.add_page()
+                y_anchor = pdf.get_y() + 5
+
+            x_pos = 15 if col == 0 else 110
             
-            x_pos = 15 if i % 2 == 0 else 110
-            y_pos = pdf.get_y()
+            # Gambar & Bingkai
+            pdf.rect(x_pos, y_anchor, img_w, img_h)
+            pdf.image(p['img'], x=x_pos+1, y=y_anchor+1, w=img_w-2, h=img_h-10)
             
-            pdf.rect(x_pos, y_pos, img_w, img_h)
-            pdf.image(p['img'], x=x_pos+1, y=y_pos+1, w=img_w-2, h=img_h-10)
-            
-            pdf.set_xy(x_pos, y_pos + img_h - 7)
+            # Caption
+            pdf.set_xy(x_pos, y_anchor + img_h - 7)
             pdf.set_font("helvetica", 'I', 8)
             pdf.cell(img_w, 5, f"Photo {i+1}: {p['cap']}", align='C')
             
-            if i % 2 == 1 or i == len(photos)-1:
-                pdf.set_y(y_pos + img_h + 10)
+            # Jika sudah foto kedua dalam satu baris, update posisi Y untuk baris berikutnya
+            if col == 1 or i == len(photos)-1:
+                y_anchor += (img_h + 10)
+                pdf.set_y(y_anchor)
 
-    # Signatures (Terkunci satu blok)
-    # Jika sisa halaman kurang dari 60mm, pindah halaman agar tanda tangan & nama tidak terpisah
-    if pdf.get_y() > 210: 
+    # --- SIGNATURES LOCK DI PALING BAWAH HALAMAN ---
+    # Jika sisa halaman terlalu sedikit, pindah halaman dulu
+    if pdf.get_y() > 220:
         pdf.add_page()
     
-    current_y = pdf.get_y() + 10
-    pdf.set_y(current_y)
+    # Set posisi 60mm dari dasar kertas
+    pdf.set_y(-60)
+    sig_start_y = pdf.get_y()
+    
     pdf.set_font("helvetica", 'B', 10)
     pdf.cell(90, 7, "Service Technician,", align='C')
     pdf.cell(90, 7, "Customer,", align='C')
     
-    if s_t: pdf.image(s_t, x=45, y=current_y + 8, w=30)
-    if s_c: pdf.image(s_c, x=135, y=current_y + 8, w=30)
+    # Tanda Tangan (Posisi absolut di atas nama)
+    if s_t: pdf.image(s_t, x=45, y=sig_start_y + 8, w=30)
+    if s_c: pdf.image(s_c, x=135, y=sig_start_y + 8, w=30)
     
-    pdf.set_y(current_y + 35)
+    # Nama (Terkunci di bawah area tanda tangan)
+    pdf.set_y(sig_start_y + 35)
     pdf.set_font("helvetica", 'BU', 10)
     pdf.cell(90, 7, data['cb'], align='C')
     pdf.cell(90, 7, data['mw'], align='C')
@@ -134,13 +146,11 @@ st.markdown("<style>iframe{border:1px solid #ddd !important; border-radius:10px;
 st.title("Digital Service Report")
 client = get_gspread_client()
 
-# Sidebar hanya untuk foto lampiran
 with st.sidebar:
     st.header("Attachments")
     photo_files = st.file_uploader("Upload Photos", type=["jpg", "png"], accept_multiple_files=True)
     caps = [st.text_input(f"Caption {i+1}", key=f"c_{i}") for i in range(len(photo_files))]
 
-# Form input
 col1, col2 = st.columns(2)
 with col1:
     cb = st.text_input("Technician Name")
@@ -157,6 +167,7 @@ fu = st.text_area("Action Taken / Follow Up")
 
 st.write("---")
 st.write("### Signatures")
+# Lebar canvas tanda tangan disesuaikan agar nyaman di HP
 can_t = st_canvas(stroke_width=2, height=150, width=400, key="t_can", background_color="white")
 st.caption("Technician Signature")
 can_c = st_canvas(stroke_width=2, height=150, width=400, key="c_can", background_color="white")
@@ -164,9 +175,9 @@ st.caption("Customer Signature")
 
 if st.button("🚀 GENERATE PDF REPORT", type="primary", use_container_width=True):
     if not cb:
-        st.error("Nama Teknisi harus diisi!")
+        st.error("Please enter Technician Name!")
     else:
-        # Menggunakan logo.png yang ada di folder aplikasi secara otomatis
+        # Gunakan logo.png di folder lokal (otomatis)
         logo_path = "logo.png" 
         
         report_photos = []
@@ -182,7 +193,7 @@ if st.button("🚀 GENERATE PDF REPORT", type="primary", use_container_width=Tru
         pdf_bytes = create_pdf(bundle, s_t, s_c, logo_path, report_photos)
         
         st.session_state['final_pdf'] = pdf_bytes
-        st.success("PDF Berhasil Dibuat!")
+        st.success("PDF Ready for Download!")
 
 if 'final_pdf' in st.session_state:
     st.download_button("📥 DOWNLOAD PDF", data=st.session_state['final_pdf'], file_name=f"Report_{rd}.pdf", use_container_width=True)
