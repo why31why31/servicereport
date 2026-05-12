@@ -53,7 +53,7 @@ def optimize_image(image_input, max_res=(500, 500)):
         return img
     except: return None
 
-# --- 3. CORE FUNCTIONS ---
+# --- 3. CLOUD FUNCTIONS ---
 def upload_to_drive(pdf_bytes, filename, creds):
     service = build('drive', 'v3', credentials=creds)
     file_metadata = {'name': filename, 'parents': [FOLDER_ID]}
@@ -62,13 +62,32 @@ def upload_to_drive(pdf_bytes, filename, creds):
     return file.get('webViewLink')
 
 def sort_spreadsheet_by_date(client, sheet_name):
-    """Mengurutkan spreadsheet berdasarkan kolom A (Tanggal) secara ascending"""
     try:
         sheet = client.open(sheet_name).sheet1
-        # 1 adalah kolom A, 'asc' adalah dari yang terlama ke terbaru
-        sheet.sort((1, 'asc'))
-    except Exception as e:
-        st.sidebar.warning(f"Otomatis urut tanggal gagal: {e}")
+        sheet.sort((1, 'asc'), range='A2:K1000')
+    except: pass
+
+# --- 4. PDF CLASS (Desain Anda yang sudah OK) ---
+class PDF(FPDF):
+    def __init__(self, logo_img=None):
+        super().__init__()
+        self.logo_img = logo_img
+        self.set_margin(15)
+
+    def header(self):
+        if self.page_no() == 1:
+            if self.logo_img:
+                w_orig, h_orig = self.logo_img.size
+                logo_h = 18
+                logo_w = (w_orig / h_orig) * logo_h
+                self.image(self.logo_img, x=(210 - logo_w) / 2, y=8, h=logo_h)
+                self.ln(logo_h + 2)
+            self.set_fill_color(41, 128, 185)
+            self.set_text_color(255, 255, 255)
+            self.set_font('helvetica', 'B', 14)
+            self.cell(0, 10, "SERVICE REPORT", fill=True, align='C', border=0, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+            self.set_text_color(0, 0, 0)
+            self.ln(2)
 
 def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
     pdf = PDF(logo_img=logo)
@@ -89,6 +108,7 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
         pdf.line(x_start + 1, y_start + h_row - 1.2, x_start + w_value - 1, y_start + h_row - 1.2)
         if is_last: pdf.ln(h_row)
 
+    # Grid Info
     draw_aligned_cell("Technician", d.get('Completed By'), 25, 65)
     draw_aligned_cell("Date", d.get('Date'), 25, 65, is_last=True)
     draw_aligned_cell("Customer", d.get('Customer'), 25, 65)
@@ -103,7 +123,9 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
     pdf.set_font("helvetica", '', 9)
     pdf.multi_cell(0, 5, d.get('Problem'), border=0); pdf.ln(2)
     
+    pdf.set_font("helvetica", 'B', 10)
     pdf.cell(0, 7, "REPORT / FOLLOW UP ACTION", border='B', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    pdf.set_font("helvetica", '', 9)
     pdf.multi_cell(0, 5, d.get('Follow Up'), border=0); pdf.ln(4)
 
     if extra_items:
@@ -115,6 +137,7 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
         for i, item in enumerate(extra_items):
             if i > 0 and i % 4 == 0: pdf.add_page(); row_y = 25
             elif i > 0 and i % 2 == 0: row_y += rh + 12
+            if row_y + rh > 280: pdf.add_page(); row_y = 25
             col = i % 2; x_p = m_x + (col * (cw + gap))
             pdf.set_draw_color(200, 200, 200); pdf.rect(x_p, row_y, cw, rh)
             pdf.image(item['img'], x=x_p+1, y=row_y+1, w=cw-2, h=rh-8)
@@ -133,25 +156,6 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
     pdf.set_xy(105, sig_y+26)
     pdf.cell(95, 7, f"{d.get('Meet With')}", align='C')
     return bytes(pdf.output())
-
-# --- 4. PDF CLASS ---
-class PDF(FPDF):
-    def __init__(self, logo_img=None):
-        super().__init__()
-        self.logo_img = logo_img
-        self.set_margin(15)
-
-    def header(self):
-        if self.page_no() == 1 and self.logo_img:
-            w_orig, h_orig = self.logo_img.size
-            logo_h = 18
-            logo_w = (w_orig / h_orig) * logo_h
-            self.image(self.logo_img, x=(210 - logo_w) / 2, y=8, h=logo_h)
-            self.ln(logo_h + 2)
-            self.set_fill_color(41, 128, 185); self.set_text_color(255, 255, 255)
-            self.set_font('helvetica', 'B', 14)
-            self.cell(0, 10, "SERVICE REPORT", fill=True, align='C', border=0, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-            self.set_text_color(0, 0, 0); self.ln(2)
 
 # --- 5. UI ---
 st.set_page_config(page_title="Finpac Service Report", layout="centered")
@@ -193,7 +197,7 @@ with st.form("main"):
     with s2: 
         st.write("Customer Signature:"); cc = st_canvas(stroke_width=2, height=80, width=200, key="cc", background_color="#eee")
 
-    if st.form_submit_button("Generate & Simpan Online"):
+    if st.form_submit_button("Generate & Simpan Cloud"):
         if not cb: st.error("Nama Technician harus diisi")
         else:
             final_logo = optimize_image(uploaded_logo) if uploaded_logo else default_logo
@@ -208,24 +212,21 @@ with st.form("main"):
             if client:
                 try:
                     link_gdrive = upload_to_drive(pdf_bytes, f"Report_{sn}_{cu}.pdf", creds)
-                    st.success("✅ PDF Terunggah ke Drive")
+                    st.success("✅ PDF Berhasil diunggah ke Drive")
                 except: st.error("⚠️ Drive Gagal (Kuota)")
 
                 try:
                     sheet = client.open(SHEET_NAME).sheet1
                     new_row = [str(rd), rd.strftime("%A"), cu, ma, ty, sn, pr, fu, cb, status, link_gdrive]
                     sheet.append_row(new_row)
-                    
-                    # PROSES URUTKAN TANGGAL OTOMATIS
                     sort_spreadsheet_by_date(client, SHEET_NAME)
-                    
-                    st.success("✅ Data Berhasil Dicatat & Diurutkan")
+                    st.success("✅ Data Berhasil masuk ke Spreadsheet")
                 except Exception as e: st.error(f"❌ Spreadsheet Gagal: {e}")
             
             st.session_state.update({'pdf': pdf_bytes, 'sn': sn})
 
 if 'pdf' in st.session_state:
     st.write("---")
-    st.download_button("⬇️ Download PDF Lokal", data=st.session_state['pdf'], file_name=f"Report_{st.session_state['sn']}.pdf")
+    st.download_button("⬇️ Download PDF", data=st.session_state['pdf'], file_name=f"Report_{st.session_state['sn']}.pdf")
     base64_pdf = base64.b64encode(st.session_state['pdf']).decode()
     st.markdown(f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="800"></iframe>', unsafe_allow_html=True)
