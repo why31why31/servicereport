@@ -40,7 +40,27 @@ def optimize_image(image_input, max_res=(500, 500)):
         return img
     except: return None
 
-# --- 3. PDF CLASS ---
+# --- 3. RESET FUNCTION ---
+def reset_all_fields():
+    # Daftar semua key yang digunakan di widget
+    keys_to_reset = [
+        'cb_in', 'cu_in', 'mw_in', 'st_in', 'rd_in', 
+        'ma_in', 'ty_in', 'sn_in', 'pr_in', 'fu_in', 
+        'manual_link_in'
+    ]
+    for k in keys_to_reset:
+        if k in st.session_state:
+            if k == 'cu_in': st.session_state[k] = "PT. Finpac Anugerah Indonesia"
+            elif k == 'st_in': st.session_state[k] = "Open"
+            elif k == 'rd_in': st.session_state[k] = date.today()
+            else: st.session_state[k] = ""
+    
+    # Hapus data PDF dan canvas
+    if 'pdf' in st.session_state: del st.session_state['pdf']
+    if 'row_data' in st.session_state: del st.session_state['row_data']
+    if 'download_name' in st.session_state: del st.session_state['download_name']
+
+# --- 4. PDF CLASS ---
 class PDF(FPDF):
     def __init__(self, logo_img=None):
         super().__init__()
@@ -75,7 +95,6 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
         pdf.set_line_width(0.05); pdf.line(x + 1, y + h_row - 1.2, x + wv - 1, y + h_row - 1.2)
         if last: pdf.ln(h_row)
 
-    # Grid Utama
     draw_aligned_cell("Technician", d.get('Completed By'), 25, 65)
     draw_aligned_cell("Date", d.get('Date'), 25, 65, last=True)
     draw_aligned_cell("Customer", d.get('Customer'), 25, 65)
@@ -104,20 +123,17 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
             pdf.cell(cw, 5, f"Photo {i+1}: {clean_text(item['caption'][:40])}", align='C')
             pdf.set_y(row_y + rh + 8)
 
-    # --- LOGIKA TANDA TANGAN (LOCK DI BAWAH) ---
-    if pdf.get_y() > 220: pdf.add_page()
-    pdf.set_y(240) 
-    pdf.set_font("helvetica", 'B', 9); sy = pdf.get_y()
-    pdf.set_xy(15, sy); pdf.cell(90, 7, "Service Technician,", align='C')
-    pdf.set_xy(105, sy); pdf.cell(90, 7, "Customer,", align='C')
-    if sig_t: pdf.image(sig_t, x=45, y=sy + 7, w=30)
-    if sig_c: pdf.image(sig_c, x=135, y=sy + 7, w=30)
-    pdf.set_font("helvetica", 'BU', 9); pdf.set_xy(15, sy + 28); pdf.cell(90, 7, f"{d.get('Completed By')}", align='C')
-    pdf.set_xy(105, sy + 28); pdf.cell(90, 7, f"{d.get('Meet With')}", align='C')
-    
+    if pdf.get_y() > 240: pdf.add_page()
+    pdf.ln(5); pdf.set_font("helvetica", 'B', 9); sy = pdf.get_y()
+    pdf.set_xy(10, sy); pdf.cell(95, 7, "Service Technician,", align='C')
+    pdf.set_xy(105, sy); pdf.cell(95, 7, "Customer,", align='C')
+    if sig_t: pdf.image(sig_t, x=45, y=sy+8, w=25)
+    if sig_c: pdf.image(sig_c, x=140, y=sy+8, w=25)
+    pdf.set_font("helvetica", 'BU', 9); pdf.set_xy(10, sy+26); pdf.cell(95, 7, f"{d.get('Completed By')}", align='C')
+    pdf.set_xy(105, sy+26); pdf.cell(95, 7, f"{d.get('Meet With')}", align='C')
     return bytes(pdf.output())
 
-# --- 4. UI & MAIN LOGIC ---
+# --- 5. UI ---
 st.set_page_config(page_title="Finpac Service Report", layout="centered")
 client = get_gspread_client()
 
@@ -131,7 +147,8 @@ if uploaded_photos:
     for i, _ in enumerate(uploaded_photos):
         photo_caps.append(st.sidebar.text_input(f"Caption Foto {i+1}", key=f"cap_{i}"))
 
-with st.form("main_form", clear_on_submit=False):
+# Main Form
+with st.form("main_form"):
     c1, c2 = st.columns(2)
     with c1:
         cb = st.text_input("Completed By", key="cb_in")
@@ -146,10 +163,12 @@ with st.form("main_form", clear_on_submit=False):
     pr, fu = st.text_area("Problem Description", key="pr_in"), st.text_area("Report Action", key="fu_in")
     st.write("---")
     s1, s2 = st.columns(2)
-    with s1: 
-        st.write("Technician Signature:"); ct = st_canvas(stroke_width=2, height=80, width=200, key="ct_can", background_color="#eee")
-    with s2: 
-        st.write("Customer Signature:"); cc = st_canvas(stroke_width=2, height=80, width=200, key="cc_can", background_color="#eee")
+    with s1:
+        st.write("Technician Signature:")
+        ct = st_canvas(stroke_width=2, height=80, width=200, key="ct_can", background_color="#eee")
+    with s2:
+        st.write("Customer Signature:")
+        cc = st_canvas(stroke_width=2, height=80, width=200, key="cc_can", background_color="#eee")
     
     if st.form_submit_button("1. Generate PDF"):
         if not cb: st.error("Nama Technician harus diisi")
@@ -163,7 +182,7 @@ with st.form("main_form", clear_on_submit=False):
             st.session_state['pdf'] = create_pdf(d_dict, sig_t, sig_c, logo, final_p)
             st.session_state['row_data'] = [str(rd), rd.strftime("%A"), cu, ma, ty, sn, pr, fu, cb, status]
             st.session_state['download_name'] = f"Report_{cu}_{str(rd)}.pdf"
-            st.success(f"✅ PDF '{st.session_state['download_name']}' Berhasil dibuat!")
+            st.success("✅ PDF Berhasil dibuat!")
 
 if 'pdf' in st.session_state and 'download_name' in st.session_state:
     st.write("---")
@@ -176,12 +195,14 @@ if 'pdf' in st.session_state and 'download_name' in st.session_state:
         elif client:
             try:
                 sheet = client.open(SHEET_NAME).sheet1
+                # Formula Hyperlink: Nama Customer (Tanggal)
                 display_name = f"{st.session_state['row_data'][2]} ({st.session_state['row_data'][0]})"
                 link_formula = f'=HYPERLINK("{manual_link}", "{display_name}")'
+                
                 full_row = st.session_state['row_data'] + [link_formula]
                 sheet.append_row(full_row, value_input_option='USER_ENTERED')
                 sheet.sort((1, 'asc'), range='A2:K2000')
-                st.success("✅ Data tersimpan! Mereset form...")
-                for key in list(st.session_state.keys()): del st.session_state[key]
+                st.success("✅ Data tersimpan!")
+                reset_all_fields()
                 st.rerun()
             except Exception as e: st.error(f"Gagal: {e}")
