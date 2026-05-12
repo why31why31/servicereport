@@ -123,7 +123,7 @@ st.markdown("""
         border: 1px solid #ddd !important;
         border-radius: 4px !important;
         width: 200px !important;
-        height: 80px !important;
+        height: 110px !important; /* Tinggi ditambah sedikit untuk ruang toolbar */
     }
     </style>
     """, unsafe_allow_html=True)
@@ -154,15 +154,29 @@ with st.form("main_form"):
     pr, fu = st.text_area("Problem Description", key="pr_in"), st.text_area("Report Action", key="fu_in")
     st.form_submit_button("Lanjut ke Tanda Tangan")
 
-# --- BAGIAN TANDA TANGAN (Tanpa parameter update_stroke) ---
+# --- BAGIAN TANDA TANGAN (Toolbar dikembalikan) ---
 st.write("---")
 s1, s2 = st.columns(2)
 with s1:
     st.write("Technician Signature:")
-    ct = st_canvas(stroke_width=2, height=80, width=200, key="ct_can", background_color="rgba(0,0,0,0)", display_toolbar=False)
+    ct = st_canvas(
+        stroke_width=2, 
+        height=80, 
+        width=200, 
+        key="ct_can", 
+        background_color="rgba(0,0,0,0)", 
+        display_toolbar=True  # Mengaktifkan tombol hapus/tong sampah
+    )
 with s2:
     st.write("Customer Signature:")
-    cc = st_canvas(stroke_width=2, height=80, width=200, key="cc_can", background_color="rgba(0,0,0,0)", display_toolbar=False)
+    cc = st_canvas(
+        stroke_width=2, 
+        height=80, 
+        width=200, 
+        key="cc_can", 
+        background_color="rgba(0,0,0,0)", 
+        display_toolbar=True  # Mengaktifkan tombol hapus/tong sampah
+    )
 
 if st.button("1. Generate PDF Report", type="primary"):
     if not cb:
