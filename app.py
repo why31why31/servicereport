@@ -14,7 +14,7 @@ from googleapiclient.http import MediaIoBaseUpload
 
 # --- 1. CONFIG & SETUP ---
 # Ambil ID dari URL folder Google Drive Anda
-FOLDER_ID = "MASUKKAN_ID_FOLDER_GDRIVE_DISINI" 
+FOLDER_ID = "1CODLFKhki8SUL4Ijr7XaqE-x9tQjb6ev"
 SHEET_NAME = "Service Report Log"
 
 def get_gspread_client():
