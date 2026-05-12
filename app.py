@@ -75,7 +75,6 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
         pdf.set_line_width(0.05); pdf.line(x + 1, y + h_row - 1.2, x + wv - 1, y + h_row - 1.2)
         if last: pdf.ln(h_row)
 
-    # Grid Utama
     draw_aligned_cell("Technician", d.get('Completed By'), 25, 65)
     draw_aligned_cell("Date", d.get('Date'), 25, 65, last=True)
     draw_aligned_cell("Customer", d.get('Customer'), 25, 65)
@@ -104,7 +103,7 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
             pdf.cell(cw, 5, f"Photo {i+1}: {clean_text(item['caption'][:40])}", align='C')
             pdf.set_y(row_y + rh + 8)
 
-    # --- LOGIKA TANDA TANGAN (LOCK DI BAWAH) ---
+    # --- LOGIKA TANDA TANGAN (LOCK DI BAWAH & TRANSPARAN) ---
     if pdf.get_y() > 220: pdf.add_page()
     pdf.set_y(240) 
     pdf.set_font("helvetica", 'B', 9); sy = pdf.get_y()
@@ -114,16 +113,21 @@ def create_pdf(data, sig_t=None, sig_c=None, logo=None, extra_items=None):
     if sig_c: pdf.image(sig_c, x=135, y=sy + 7, w=30)
     pdf.set_font("helvetica", 'BU', 9); pdf.set_xy(15, sy + 28); pdf.cell(90, 7, f"{d.get('Completed By')}", align='C')
     pdf.set_xy(105, sy + 28); pdf.cell(90, 7, f"{d.get('Meet With')}", align='C')
-    
     return bytes(pdf.output())
 
-# --- 4. UI & MAIN LOGIC ---
+# --- 5. UI & LOGIC ---
 st.set_page_config(page_title="Finpac Service Report", layout="centered")
-client = get_gspread_client()
 
+# CSS Agar Canvas Transparan terlihat kotaknya
+st.markdown("""
+    <style>
+    iframe[title="streamlit_drawable_canvas.st_canvas"] { border: 1px solid #ddd !important; background-color: #fff !important; }
+    </style>
+    """, unsafe_allow_html=True)
+
+client = get_gspread_client()
 st.title("Digital Service Report")
 
-# Sidebar
 uploaded_logo = st.sidebar.file_uploader("Ganti Logo", type=["png", "jpg"])
 uploaded_photos = st.sidebar.file_uploader("Photos", type=["png", "jpg"], accept_multiple_files=True)
 photo_caps = []
@@ -146,10 +150,9 @@ with st.form("main_form", clear_on_submit=False):
     pr, fu = st.text_area("Problem Description", key="pr_in"), st.text_area("Report Action", key="fu_in")
     st.write("---")
     s1, s2 = st.columns(2)
-    with s1: 
-        st.write("Technician Signature:"); ct = st_canvas(stroke_width=2, height=80, width=200, key="ct_can", background_color="#eee")
-    with s2: 
-        st.write("Customer Signature:"); cc = st_canvas(stroke_width=2, height=80, width=200, key="cc_can", background_color="#eee")
+    # Background "rgba(0,0,0,0)" agar tidak ada kotak abu-abu di PDF
+    with s1: ct = st_canvas(stroke_width=2, height=80, width=200, key="ct_can", background_color="rgba(0,0,0,0)")
+    with s2: cc = st_canvas(stroke_width=2, height=80, width=200, key="cc_can", background_color="rgba(0,0,0,0)")
     
     if st.form_submit_button("1. Generate PDF"):
         if not cb: st.error("Nama Technician harus diisi")
@@ -163,12 +166,11 @@ with st.form("main_form", clear_on_submit=False):
             st.session_state['pdf'] = create_pdf(d_dict, sig_t, sig_c, logo, final_p)
             st.session_state['row_data'] = [str(rd), rd.strftime("%A"), cu, ma, ty, sn, pr, fu, cb, status]
             st.session_state['download_name'] = f"Report_{cu}_{str(rd)}.pdf"
-            st.success(f"✅ PDF '{st.session_state['download_name']}' Berhasil dibuat!")
+            st.success("✅ PDF Berhasil dibuat!")
 
 if 'pdf' in st.session_state and 'download_name' in st.session_state:
     st.write("---")
     st.download_button("⬇️ Download PDF", data=st.session_state['pdf'], file_name=st.session_state['download_name'])
-    
     manual_link = st.text_input("Masukkan Link GDrive PDF di sini:", key="manual_link_in")
     
     if st.button("2. Simpan & Reset Form"):
@@ -181,7 +183,7 @@ if 'pdf' in st.session_state and 'download_name' in st.session_state:
                 full_row = st.session_state['row_data'] + [link_formula]
                 sheet.append_row(full_row, value_input_option='USER_ENTERED')
                 sheet.sort((1, 'asc'), range='A2:K2000')
-                st.success("✅ Data tersimpan! Mereset form...")
+                st.success("✅ Data tersimpan!")
                 for key in list(st.session_state.keys()): del st.session_state[key]
                 st.rerun()
             except Exception as e: st.error(f"Gagal: {e}")
