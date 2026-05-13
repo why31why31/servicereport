@@ -32,7 +32,6 @@ class PDF(FPDF):
     def header(self):
         if self.page_no() == 1:
             if self.logo_path and os.path.exists(self.logo_path):
-                # Kop surat proporsional
                 self.image(self.logo_path, x=70, y=8, w=70)
                 self.set_y(28)
             else:
@@ -70,7 +69,7 @@ def create_pdf(data, s_t, s_c, logo_path, photos):
     pdf.cell(0, 7, "FOLLOW UP ACTION", border='B', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.set_font("helvetica", '', 10); pdf.multi_cell(0, 6, data['fu'])
 
-    # Photos Section (Sejajar Kiri Kanan)
+    # Photos Section
     if photos:
         if pdf.get_y() > 180: pdf.add_page()
         pdf.ln(5); pdf.set_font("helvetica", 'B', 10)
@@ -93,7 +92,7 @@ def create_pdf(data, s_t, s_c, logo_path, photos):
             if col == 1 or i == len(photos)-1:
                 y_fix += (img_h + 8); pdf.set_y(y_fix)
 
-    # Signatures Group (Rapat & Terkunci)
+    # Signatures Group (Terkunci & Rapat)
     if pdf.get_y() > 220: pdf.add_page()
     pdf.ln(10); current_y = pdf.get_y()
     pdf.set_font("helvetica", 'B', 10)
@@ -103,7 +102,7 @@ def create_pdf(data, s_t, s_c, logo_path, photos):
     if s_t: pdf.image(s_t, x=45, y=current_y + 8, w=30)
     if s_c: pdf.image(s_c, x=135, y=current_y + 8, w=30)
     
-    pdf.set_y(current_y + 20) # Spasi rapat
+    pdf.set_y(current_y + 20) # Nama ditarik lebih rapat ke atas
     pdf.set_font("helvetica", 'BU', 10)
     pdf.cell(90, 7, data['cb'], align='C')
     pdf.cell(90, 7, data['mw'], align='C')
@@ -161,7 +160,6 @@ if st.button("🚀 GENERATE PDF REPORT", type="primary", use_container_width=Tru
         
         st.session_state['final_pdf'] = create_pdf(bundle, s_t, s_c, logo_path, report_photos)
         
-        # Data untuk Spreadsheet sesuai urutan kolom Anda
         day_name = rd.strftime("%A")
         st.session_state['row_data'] = [str(rd), day_name, cu, ma, ty, sn, pr, fu, cb, status]
         st.session_state['pdf_filename'] = f"Report_{cu}_{rd}.pdf"
@@ -183,17 +181,16 @@ if 'final_pdf' in st.session_state:
                 
                 filename = st.session_state['pdf_filename']
                 
-                # PERBAIKAN FORMULA: Menggunakan format raw string agar karakter khusus tidak rusak
-                hyperlink_formula = f'=HYPERLINK("{g_link}";"{filename}")' # Gunakan titik koma (;) jika regional Sheets Indonesia
-                # Jika Sheets Anda regional US, gunakan koma (,): 
-                # hyperlink_formula = f'=HYPERLINK("{g_link}", "{filename}")'
+                # Formula disesuaikan (pakai ; jika regional Indonesia, pakai , jika US)
+                # Saya pakai ; karena biasanya error di capture sebelumnya karena regional
+                hyperlink_formula = f'=HYPERLINK("{g_link}";"{filename}")'
                 
                 full_row = st.session_state['row_data'] + [hyperlink_formula]
                 
-                # KUNCI PERBAIKAN: value_input_option='USER_ENTERED' wajib ada
+                # Gunakan USER_ENTERED agar Google Sheets memproses teks sebagai formula
                 sheet.append_row(full_row, value_input_option='USER_ENTERED')
                 
-                # Auto-sort berdasarkan Tanggal (Kolom A)
+                # Sort A-Z berdasarkan Tanggal (Kolom A)
                 sheet.sort((1, 'asc'), range='A2:K5000')
                 
                 st.success("Data Saved & Formula Active!")
