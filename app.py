@@ -182,15 +182,21 @@ if 'final_pdf' in st.session_state:
                 sheet = spreadsheet.worksheet(WORKSHEET_NAME)
                 
                 filename = st.session_state['pdf_filename']
-                hyperlink_formula = f'=HYPERLINK("{g_link}", "{filename}")'
+                
+                # PERBAIKAN FORMULA: Menggunakan format raw string agar karakter khusus tidak rusak
+                hyperlink_formula = f'=HYPERLINK("{g_link}";"{filename}")' # Gunakan titik koma (;) jika regional Sheets Indonesia
+                # Jika Sheets Anda regional US, gunakan koma (,): 
+                # hyperlink_formula = f'=HYPERLINK("{g_link}", "{filename}")'
                 
                 full_row = st.session_state['row_data'] + [hyperlink_formula]
+                
+                # KUNCI PERBAIKAN: value_input_option='USER_ENTERED' wajib ada
                 sheet.append_row(full_row, value_input_option='USER_ENTERED')
                 
                 # Auto-sort berdasarkan Tanggal (Kolom A)
                 sheet.sort((1, 'asc'), range='A2:K5000')
                 
-                st.success("Data Saved to Spreadsheet!")
+                st.success("Data Saved & Formula Active!")
                 for k in list(st.session_state.keys()): del st.session_state[k]
                 st.rerun()
             except Exception as e:
