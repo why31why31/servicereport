@@ -119,10 +119,12 @@ def create_pdf(data, s_t, s_c, logo_path, photos):
     return bytes(pdf.output())
 
 # --- 4. MAIN APPLICATION ---
+# Check Authentication
 if "authenticated" not in st.session_state:
     st.set_page_config(page_title="Login - Service Report", layout="centered")
     login_screen()
 else:
+    # Ensure setup logic only runs once per login
     if "main_setup_done" not in st.session_state:
         st.session_state["main_setup_done"] = True
         st.rerun()
@@ -132,14 +134,19 @@ else:
 
     with st.sidebar:
         st.header("App Menu")
-        st.write(f"User: **{st.session_state.get('user_profile', 'Unknown')}**")
+        # Safe session check to avoid KeyError
+        current_user = st.session_state.get('user_profile', 'User')
+        st.write(f"User: **{current_user}**")
+        
         if st.button("Logout", use_container_width=True):
             for key in list(st.session_state.keys()):
                 del st.session_state[key]
             st.rerun()
+        
         st.write("---")
         st.header("Media")
-        photo_files = st.file_uploader("Upload Photos", type=["jpg", "png"], accept_multiple_files=True, key="main_uploader")
+        # Unique key added to prevent DuplicateElementId
+        photo_files = st.file_uploader("Upload Photos", type=["jpg", "png"], accept_multiple_files=True, key="main_photo_uploader")
         caps = [st.text_input(f"Caption {i+1}", key=f"cap_input_{i}") for i in range(len(photo_files))]
 
     st.title("Digital Service Report")
@@ -155,7 +162,6 @@ else:
         with col2:
             rd = st.date_input("Date", value=date.today())
             ma = st.text_input("Machine")
-            # --- KOLOM DITUKAR DI SINI ---
             ty = st.text_input("Machine Type")
             sn = st.text_input("Serial No")
         pr = st.text_area("Problem Description")
