@@ -10,7 +10,11 @@ from oauth2client.service_account import ServiceAccountCredentials
 
 # --- 1. USER ACCESS CONFIG ---
 USER_CREDENTIALS = {
-    "wahyudi": "finpac2026",
+    "Asep": "as1234",
+    "Rangga": "rangga123",
+    "Wahyu": "wahyu123",
+    "Ali": "ali123",
+    "Karim": "karim123",
     "admin": "service123"
 }
 
@@ -58,7 +62,7 @@ class PDF(FPDF):
                 self.set_y(10)
             self.set_fill_color(41, 128, 185); self.set_text_color(255, 255, 255)
             self.set_font('helvetica', 'B', 14)
-            self.cell(0, 10, "SERVICE REPORT", fill=True, align='C', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+            self.cell(0, 10, "SERVICE REPORT", fill=True, align='C', border=0, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
             self.set_text_color(0, 0, 0); self.ln(2)
 
 def create_pdf(data, s_t, s_c, logo_path, photos):
@@ -66,7 +70,6 @@ def create_pdf(data, s_t, s_c, logo_path, photos):
     pdf.set_auto_page_break(auto=True, margin=20)
     pdf.add_page()
     
-    # Information Grid
     pdf.set_font("helvetica", 'B', 9); pdf.set_fill_color(245, 245, 245)
     fields = [
         [("Technician", data['cb']), ("Date", data['rd'])],
@@ -120,7 +123,6 @@ if "authenticated" not in st.session_state:
     st.set_page_config(page_title="Login - Service Report", layout="centered")
     login_screen()
 else:
-    # Jika sudah login, setel layout utama
     if "main_setup_done" not in st.session_state:
         st.session_state["main_setup_done"] = True
         st.rerun()
@@ -128,7 +130,6 @@ else:
     st.set_page_config(page_title="Finpac Service Report", layout="centered")
     st.markdown("<style>iframe{border:1px solid #ddd !important; border-radius:10px; background-color:white;}</style>", unsafe_allow_html=True)
 
-    # Sidebar
     with st.sidebar:
         st.header("App Menu")
         st.write(f"User: **{st.session_state.get('user_profile', 'Unknown')}**")
@@ -138,7 +139,6 @@ else:
             st.rerun()
         st.write("---")
         st.header("Media")
-        # Menambahkan KEY unik agar tidak duplikat ID
         photo_files = st.file_uploader("Upload Photos", type=["jpg", "png"], accept_multiple_files=True, key="main_uploader")
         caps = [st.text_input(f"Caption {i+1}", key=f"cap_input_{i}") for i in range(len(photo_files))]
 
@@ -155,8 +155,9 @@ else:
         with col2:
             rd = st.date_input("Date", value=date.today())
             ma = st.text_input("Machine")
-            sn = st.text_input("Serial No")
+            # --- KOLOM DITUKAR DI SINI ---
             ty = st.text_input("Machine Type")
+            sn = st.text_input("Serial No")
         pr = st.text_area("Problem Description")
         fu = st.text_area("Action Taken / Follow Up")
         st.form_submit_button("Lock Data")
