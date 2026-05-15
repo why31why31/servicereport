@@ -150,9 +150,31 @@ def create_pdf(data, s_t, s_c, logo_path, photos):
 if "authenticated" not in st.session_state:
     login_screen()
 else:
+    # Set config HARUS di baris pertama setelah login berhasil
     st.set_page_config(page_title="Service Report", layout="centered")
+    
+    # CSS for stable layout
     st.markdown("<style>iframe{border:1px solid #ddd !important; border-radius:10px; background-color:white;}</style>", unsafe_allow_html=True)
 
+    # Sidebar logout & Profile
+    # Kita pindahkan pengecekan profil ke dalam blok 'else' yang aman
+    with st.sidebar:
+        st.header("Media Attachments")
+        # Menampilkan user yang aktif
+        if 'user_profile' in st.session_state:
+            st.write(f"Active User: **{st.session_state['user_profile']}**")
+        
+        if st.button("Logout", use_container_width=True):
+            for key in list(st.session_state.keys()):
+                del st.session_state[key]
+            st.rerun()
+            
+        st.write("---")
+        photo_files = st.file_uploader("Upload Photos", type=["jpg", "png"], accept_multiple_files=True)
+        caps = [st.text_input(f"Caption {i+1}", key=f"c_{i}") for i in range(len(photo_files))]
+
+    # Top Bar
+    st.title("Digital Service Report")
     # Top Bar / Profile
     with st.container():
         c1, c2 = st.columns([4, 1])
