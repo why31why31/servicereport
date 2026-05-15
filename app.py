@@ -73,8 +73,8 @@ def create_pdf(data, s_t, s_c, logo_path, photos):
     pdf.set_font("helvetica", 'B', 9); pdf.set_fill_color(245, 245, 245)
     fields = [
         [("Technician", data['cb']), ("Date", data['rd'])],
-        [("Customer", data['cu']), ("Contact", data['mw'])],
-        [("Machine", data['ma']), ("Type", data['ty']), ("SN", data['sn'])]
+        [("Customer", data['cu']), ("Meet with", data['mw'])],
+        [("Machine", data['ma']), ("Type", data['ty']), ("S/N", data['sn'])]
     ]
     for row in fields:
         for label, value in row:
