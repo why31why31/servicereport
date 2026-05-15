@@ -161,7 +161,7 @@ else:
             status = st.selectbox("Status", ["Open", "Pending", "Closed"])
         with col2:
             rd = st.date_input("Date", value=date.today())
-            ma = st.text_input("Machine")
+            ma = st.selectbox("Machine", ["Siebler", "Noack", "Kilian", "Promatic", "Truking", "MG2", "FrymaKoruma", "Stephan", "Frewitt", "Lytzen", "Other Machine"], key="ma_select")
             ty = st.text_input("Machine Type")
             sn = st.text_input("Serial No")
         pr = st.text_area("Problem Description")
