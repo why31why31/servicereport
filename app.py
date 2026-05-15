@@ -8,42 +8,25 @@ import os
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 
-# --- 1. USER ACCESS CONFIGURATION ---
-# Add or change users here
+# --- 1. USER ACCESS CONFIG ---
 USER_CREDENTIALS = {
-    "Asep Wahyu": "as1234",
-    "Rangga": "rangga123",
-    "Wahyu": "wahyu123",
-    "Ali": "ali123",
-    "Karim": "karim123",
+    "wahyudi": "finpac2026",
     "admin": "service123"
 }
 
 def login_screen():
-    st.markdown("""
-        <style>
-        .login-box {
-            background-color: #f0f2f6;
-            padding: 30px;
-            border-radius: 15px;
-            border: 1px solid #ddd;
-        }
-        </style>
-    """, unsafe_allow_html=True)
-    
     st.title("🔐 Finpac Service Portal")
-    with st.container():
-        st.write("Please sign in to continue")
-        with st.form("login_form"):
-            user = st.text_input("Username")
-            pw = st.text_input("Password", type="password")
-            if st.form_submit_button("Sign In", use_container_width=True):
-                if user in USER_CREDENTIALS and USER_CREDENTIALS[user] == pw:
-                    st.session_state["authenticated"] = True
-                    st.session_state["user_profile"] = user
-                    st.rerun()
-                else:
-                    st.error("Invalid Username or Password")
+    st.write("Please sign in to continue")
+    with st.form("login_form"):
+        user = st.text_input("Username", key="login_user")
+        pw = st.text_input("Password", type="password", key="login_pw")
+        if st.form_submit_button("Sign In", use_container_width=True):
+            if user in USER_CREDENTIALS and USER_CREDENTIALS[user] == pw:
+                st.session_state["authenticated"] = True
+                st.session_state["user_profile"] = user
+                st.rerun()
+            else:
+                st.error("Invalid Username or Password")
 
 # --- 2. GOOGLE SHEETS CONFIG ---
 SPREADSHEET_ID = "1g7P6Xkm-G6JE1UR1GLOJ63HISknqdlH21viT2JoC4PY"
@@ -73,13 +56,10 @@ class PDF(FPDF):
                 self.set_y(28)
             else:
                 self.set_y(10)
-            
-            self.set_fill_color(41, 128, 185)
-            self.set_text_color(255, 255, 255)
+            self.set_fill_color(41, 128, 185); self.set_text_color(255, 255, 255)
             self.set_font('helvetica', 'B', 14)
             self.cell(0, 10, "SERVICE REPORT", fill=True, align='C', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-            self.set_text_color(0, 0, 0)
-            self.ln(2)
+            self.set_text_color(0, 0, 0); self.ln(2)
 
 def create_pdf(data, s_t, s_c, logo_path, photos):
     pdf = PDF(logo_path=logo_path)
@@ -106,91 +86,64 @@ def create_pdf(data, s_t, s_c, logo_path, photos):
     pdf.cell(0, 7, "FOLLOW UP ACTION", border='B', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.set_font("helvetica", '', 10); pdf.multi_cell(0, 6, data['fu'])
 
-    # Photos Section
     if photos:
         if pdf.get_y() > 180: pdf.add_page()
         pdf.ln(5); pdf.set_font("helvetica", 'B', 10)
         pdf.cell(0, 8, "ATTACHMENTS", border='B', align='C', new_x=XPos.LMARGIN, new_y=YPos.NEXT); pdf.ln(4)
-        
         img_w, img_h = 85, 60
         y_fix = pdf.get_y()
         for i, p in enumerate(photos):
             col = i % 2
             if col == 0 and (y_fix + img_h + 10) > 275:
                 pdf.add_page(); y_fix = pdf.get_y() + 5
-            
             x_pos = 15 if col == 0 else 110
             pdf.rect(x_pos, y_fix, img_w, img_h)
             pdf.image(p['img'], x=x_pos+1, y=y_fix+1, w=img_w-2, h=img_h-10)
-            
             pdf.set_xy(x_pos, y_fix + img_h - 7); pdf.set_font("helvetica", 'I', 8)
             pdf.cell(img_w, 5, f"Photo {i+1}: {p['cap']}", align='C')
-            
             if col == 1 or i == len(photos)-1:
                 y_fix += (img_h + 8); pdf.set_y(y_fix)
 
-    # Signatures Group
     if pdf.get_y() > 220: pdf.add_page()
-    pdf.ln(10); current_y = pdf.get_y()
+    pdf.ln(10); curr_y = pdf.get_y()
     pdf.set_font("helvetica", 'B', 10)
     pdf.cell(90, 7, "Service Technician,", align='C')
     pdf.cell(90, 7, "Customer,", align='C')
-    
-    if s_t: pdf.image(s_t, x=45, y=current_y + 8, w=30)
-    if s_c: pdf.image(s_c, x=135, y=current_y + 8, w=30)
-    
-    pdf.set_y(current_y + 20) 
-    pdf.set_font("helvetica", 'BU', 10)
-    pdf.cell(90, 7, data['cb'], align='C')
-    pdf.cell(90, 7, data['mw'], align='C')
-    
+    if s_t: pdf.image(s_t, x=45, y=curr_y + 8, w=30)
+    if s_c: pdf.image(s_c, x=135, y=curr_y + 8, w=30)
+    pdf.set_y(curr_y + 20); pdf.set_font("helvetica", 'BU', 10)
+    pdf.cell(90, 7, data['cb'], align='C'); pdf.cell(90, 7, data['mw'], align='C')
     return bytes(pdf.output())
 
 # --- 4. MAIN APPLICATION ---
 if "authenticated" not in st.session_state:
+    st.set_page_config(page_title="Login - Service Report", layout="centered")
     login_screen()
 else:
-    # Set config HARUS di baris pertama setelah login berhasil
-    st.set_page_config(page_title="Service Report", layout="centered")
-    
-    # CSS for stable layout
+    # Jika sudah login, setel layout utama
+    if "main_setup_done" not in st.session_state:
+        st.session_state["main_setup_done"] = True
+        st.rerun()
+
+    st.set_page_config(page_title="Finpac Service Report", layout="centered")
     st.markdown("<style>iframe{border:1px solid #ddd !important; border-radius:10px; background-color:white;}</style>", unsafe_allow_html=True)
 
-    # Sidebar logout & Profile
-    # Kita pindahkan pengecekan profil ke dalam blok 'else' yang aman
+    # Sidebar
     with st.sidebar:
-        st.header("Media Attachments")
-        # Menampilkan user yang aktif
-        if 'user_profile' in st.session_state:
-            st.write(f"Active User: **{st.session_state['user_profile']}**")
-        
+        st.header("App Menu")
+        st.write(f"User: **{st.session_state.get('user_profile', 'Unknown')}**")
         if st.button("Logout", use_container_width=True):
             for key in list(st.session_state.keys()):
                 del st.session_state[key]
             st.rerun()
-            
         st.write("---")
-        photo_files = st.file_uploader("Upload Photos", type=["jpg", "png"], accept_multiple_files=True)
-        caps = [st.text_input(f"Caption {i+1}", key=f"c_{i}") for i in range(len(photo_files))]
+        st.header("Media")
+        # Menambahkan KEY unik agar tidak duplikat ID
+        photo_files = st.file_uploader("Upload Photos", type=["jpg", "png"], accept_multiple_files=True, key="main_uploader")
+        caps = [st.text_input(f"Caption {i+1}", key=f"cap_input_{i}") for i in range(len(photo_files))]
 
-    # Top Bar
     st.title("Digital Service Report")
-    # Top Bar / Profile
-    with st.container():
-        c1, c2 = st.columns([4, 1])
-        c1.title("Digital Service Report")
-        if c2.button("Logout", use_container_width=True):
-            del st.session_state["authenticated"]
-            st.rerun()
-
     client = get_gspread_client()
-
-    with st.sidebar:
-        st.header("Media Attachments")
-        photo_files = st.file_uploader("Upload Photos", type=["jpg", "png"], accept_multiple_files=True)
-        caps = [st.text_input(f"Caption {i+1}", key=f"c_{i}") for i in range(len(photo_files))]
-        st.write("---")
-        st.write(f"Active User: **{st.session_state['user_profile']}**")
 
     with st.form("main_form"):
         col1, col2 = st.columns(2)
@@ -206,7 +159,7 @@ else:
             ty = st.text_input("Machine Type")
         pr = st.text_area("Problem Description")
         fu = st.text_area("Action Taken / Follow Up")
-        st.form_submit_button("Lock & Proceed")
+        st.form_submit_button("Lock Data")
 
     st.write("---")
     st.write("### Signatures")
@@ -228,18 +181,15 @@ else:
             s_c = Image.fromarray(can_c.image_data.astype('uint8')) if can_c.image_data is not None else None
             
             bundle = {'cb':cb, 'cu':cu, 'mw':mw, 'rd':str(rd), 'ma':ma, 'ty':ty, 'sn':sn, 'pr':pr, 'fu':fu}
-            
             st.session_state['final_pdf'] = create_pdf(bundle, s_t, s_c, logo_path, report_photos)
             
-            day_name = rd.strftime("%A")
-            st.session_state['row_data'] = [str(rd), day_name, cu, ma, ty, sn, pr, fu, cb, status]
+            st.session_state['row_data'] = [str(rd), rd.strftime("%A"), cu, ma, ty, sn, pr, fu, cb, status]
             st.session_state['pdf_filename'] = f"Report_{cu}_{rd}.pdf"
             st.success("PDF Generated Successfully!")
 
     if 'final_pdf' in st.session_state:
         st.write("---")
         st.download_button("📥 DOWNLOAD PDF", data=st.session_state['final_pdf'], file_name=st.session_state['pdf_filename'], use_container_width=True)
-        
         g_link = st.text_input("Paste GDrive Link here:")
         
         if st.button("💾 SAVE TO SPREADSHEET & RESET", use_container_width=True):
@@ -249,15 +199,10 @@ else:
                 try:
                     spreadsheet = client.open_by_key(SPREADSHEET_ID)
                     sheet = spreadsheet.worksheet(WORKSHEET_NAME)
-                    filename = st.session_state['pdf_filename']
-                    
-                    # Formula Hyperlink (Regional Support)
-                    hyperlink_formula = f'=HYPERLINK("{g_link}";"{filename}")'
+                    hyperlink_formula = f'=HYPERLINK("{g_link}";"{st.session_state["pdf_filename"]}")'
                     full_row = st.session_state['row_data'] + [hyperlink_formula]
-                    
                     sheet.append_row(full_row, value_input_option='USER_ENTERED')
                     sheet.sort((1, 'asc'), range='A2:K5000')
-                    
                     st.success("Data Saved!")
                     for k in list(st.session_state.keys()): del st.session_state[k]
                     st.rerun()
