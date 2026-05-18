@@ -216,16 +216,31 @@ else:
     
     with sig_col1:
         st.caption("Technician Signature")
-        # Mengisi kembali data goresan jika ada di dalam draft
+        # Menggunakan .get() untuk mencegah KeyError secara permanen
+        initial_t_sig = draft.get("t_sig_raw") if isinstance(draft, dict) else None
+        
         can_t = st_canvas(
             stroke_width=2, height=150, width=330, key="t_sig", 
             background_color="white", update_streamlit=True,
-            initial_drawing=draft["t_sig_raw"] if draft["t_sig_raw"] else None
+            initial_drawing=initial_t_sig if initial_t_sig else None
         )
         # Amankan goresan baru ke draft secara real-time
-        if can_t.json_data is not None and can_t.json_data["objects"]:
+        if can_t.json_data is not None and can_t.json_data.get("objects"):
             st.session_state["saved_draft"]["t_sig_raw"] = can_t.json_data
 
+    with sig_col2:
+        st.caption("Customer Signature")
+        # Menggunakan .get() untuk mencegah KeyError secara permanen
+        initial_c_sig = draft.get("c_sig_raw") if isinstance(draft, dict) else None
+        
+        can_c = st_canvas(
+            stroke_width=2, height=150, width=330, key="c_sig", 
+            background_color="white", update_streamlit=True,
+            initial_drawing=initial_c_sig if initial_c_sig else None
+        )
+        # Amankan goresan baru ke draft secara real-time
+        if can_c.json_data is not None and can_c.json_data.get("objects"):
+            st.session_state["saved_draft"]["c_sig_raw"] = can_c.json_data
     with sig_col2:
         st.caption("Customer Signature")
         can_c = st_canvas(
