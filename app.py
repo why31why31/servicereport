@@ -7,6 +7,7 @@ from PIL import Image
 import os
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
+import json
 
 # --- 1. USER ACCESS CONFIG ---
 USER_CREDENTIALS = {
@@ -18,13 +19,14 @@ USER_CREDENTIALS = {
     "admin": "service123"
 }
 
-# --- INISIALISASI DRAFT INDEPENDEN (DI LUAR WIDGET) ---
-# Inisialisasi dilakukan di awal script agar tidak terpengaruh siklus render widget
+# --- INISIALISASI DRAFT INDEPENDEN (TERMASUK BLOK CANVAS) ---
 if "saved_draft" not in st.session_state:
     st.session_state["saved_draft"] = {
         "cb": "", "cu": "", "mw": "", "status": "Open",
         "rd": date.today(), "ma": "Siebler", "ty": "", "sn": "",
-        "pr": "", "fu": ""
+        "pr": "", "fu": "",
+        "t_sig_raw": None,  # Draft tanda tangan teknisi (JSON)
+        "c_sig_raw": None   # Draft tanda tangan customer (JSON)
     }
 
 def login_screen():
@@ -152,7 +154,7 @@ else:
     st.set_page_config(page_title="Finpac Service Report", layout="centered")
     st.markdown("<style>iframe{border:1px solid #ddd !important; border-radius:10px; background-color:white;}</style>", unsafe_allow_html=True)
 
-    # Callback untuk menyimpan perubahan isi input ke dict `saved_draft` secara langsung
+    # Callback pelacak teks formulir
     def track_change(field_key, widget_key):
         st.session_state["saved_draft"][field_key] = st.session_state[widget_key]
 
@@ -167,12 +169,13 @@ else:
             st.session_state["saved_draft"] = {
                 "cb": "", "cu": "", "mw": "", "status": "Open",
                 "rd": date.today(), "ma": "Siebler", "ty": "", "sn": "",
-                "pr": "", "fu": ""
+                "pr": "", "fu": "",
+                "t_sig_raw": None, "c_sig_raw": None
             }
             if 'final_pdf' in st.session_state: del st.session_state['final_pdf']
             st.rerun()
 
-        # TOMBOL LOGOUT AMAN (Draft dijamin tidak hilang)
+        # TOMBOL LOGOUT AMAN
         if st.button("🚪 Logout (Keep Draft)", type="secondary", use_container_width=True):
             if "authenticated" in st.session_state: del st.session_state["authenticated"]
             if "user_profile" in st.session_state: del st.session_state["user_profile"]
@@ -184,26 +187,23 @@ else:
         caps = [st.text_input(f"Caption {i+1}", key=f"cap_input_{i}") for i in range(len(photo_files))]
 
     st.title("Digital Service Report")
-    st.info("💡 **Draft System Active:** Ketikan Anda tersimpan aman meskipun Anda Logout / ganti user.")
+    st.info("💡 **Draft System Active:** Ketikan dan Tanda Tangan Anda tersimpan otomatis meskipun Anda Logout.")
     client = get_gspread_client()
 
-    # Load nilai awal widget dari dictionary rancangan (saved_draft)
     draft = st.session_state["saved_draft"]
 
+    # Render kolom input data
     col1, col2 = st.columns(2)
     with col1:
         cb = st.text_input("Technician Name", value=draft["cb"], key="w_cb", on_change=track_change, args=("cb", "w_cb"))
         cu = st.text_input("Customer Name", value=draft["cu"], key="w_cu", on_change=track_change, args=("cu", "w_cu"))
         mw = st.text_input("Meet With", value=draft["mw"], key="w_mw", on_change=track_change, args=("mw", "w_mw"))
-        
         status_options = ["Open", "Pending", "Closed"]
         status = st.selectbox("Status", status_options, index=status_options.index(draft["status"]), key="w_status", on_change=track_change, args=("status", "w_status"))
     with col2:
         rd = st.date_input("Date", value=draft["rd"], key="w_rd", on_change=track_change, args=("rd", "w_rd"))
-        
         machine_options = ["Siebler", "Noack", "Kilian", "Promatic", "Truking", "MG2", "FrymaKoruma", "Stephan", "Frewitt", "Lytzen", "Other Machine"]
         ma = st.selectbox("Machine", machine_options, index=machine_options.index(draft["ma"]), key="w_ma", on_change=track_change, args=("ma", "w_ma"))
-        
         ty = st.text_input("Machine Type", value=draft["ty"], key="w_ty", on_change=track_change, args=("ty", "w_ty"))
         sn = st.text_input("Serial No", value=draft["sn"], key="w_sn", on_change=track_change, args=("sn", "w_sn"))
         
@@ -213,12 +213,29 @@ else:
     st.write("---")
     st.write("### Signatures")
     sig_col1, sig_col2 = st.columns(2)
+    
     with sig_col1:
         st.caption("Technician Signature")
-        can_t = st_canvas(stroke_width=2, height=150, width=330, key="t_sig", background_color="white", update_streamlit=True)
+        # Mengisi kembali data goresan jika ada di dalam draft
+        can_t = st_canvas(
+            stroke_width=2, height=150, width=330, key="t_sig", 
+            background_color="white", update_streamlit=True,
+            initial_drawing=draft["t_sig_raw"] if draft["t_sig_raw"] else None
+        )
+        # Amankan goresan baru ke draft secara real-time
+        if can_t.json_data is not None and can_t.json_data["objects"]:
+            st.session_state["saved_draft"]["t_sig_raw"] = can_t.json_data
+
     with sig_col2:
         st.caption("Customer Signature")
-        can_c = st_canvas(stroke_width=2, height=150, width=330, key="c_sig", background_color="white", update_streamlit=True)
+        can_c = st_canvas(
+            stroke_width=2, height=150, width=330, key="c_sig", 
+            background_color="white", update_streamlit=True,
+            initial_drawing=draft["c_sig_raw"] if draft["c_sig_raw"] else None
+        )
+        # Amankan goresan baru ke draft secara real-time
+        if can_c.json_data is not None and can_c.json_data["objects"]:
+            st.session_state["saved_draft"]["c_sig_raw"] = can_c.json_data
 
     st.write("---")
     if st.button("🚀 GENERATE PDF REPORT", type="primary", use_container_width=True):
@@ -232,8 +249,8 @@ else:
                 img.thumbnail((800, 800))
                 report_photos.append({'img': img, 'cap': caps[i]})
             
-            s_t = Image.fromarray(can_t.image_data.astype('uint8')) if can_t.image_data is not None else None
-            s_c = Image.fromarray(can_c.image_data.astype('uint8')) if can_c.image_data is not None else None
+            s_t = Image.fromarray(can_t.image_data.astype('uint8')) if (can_t.image_data is not None and len(can_t.json_data["objects"]) > 0) else None
+            s_c = Image.fromarray(can_c.image_data.astype('uint8')) if (can_c.image_data is not None and len(can_c.json_data["objects"]) > 0) else None
             
             bundle = {'cb': cb, 'cu': cu, 'mw': mw, 'rd': str(rd), 'ma': ma, 'ty': ty, 'sn': sn, 'pr': pr, 'fu': fu}
             st.session_state['final_pdf'] = create_pdf(bundle, s_t, s_c, logo_path, report_photos)
@@ -260,11 +277,12 @@ else:
                     sheet.sort((1, 'asc'), range='A2:K5000')
                     st.success("Data Saved!")
                     
-                    # Bersihkan draft & PDF setelah berhasil masuk spreadsheet (kembali kosong)
+                    # Reset data teks dan hilangkan coretan tanda tangan setelah berhasil submit
                     st.session_state["saved_draft"] = {
                         "cb": "", "cu": "", "mw": "", "status": "Open",
                         "rd": date.today(), "ma": "Siebler", "ty": "", "sn": "",
-                        "pr": "", "fu": ""
+                        "pr": "", "fu": "" ,
+                        "t_sig_raw": None, "c_sig_raw": None
                     }
                     for k in ["final_pdf", "row_data", "pdf_filename"]:
                         if k in st.session_state: del st.session_state[k]
