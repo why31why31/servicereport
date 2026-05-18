@@ -18,7 +18,7 @@ USER_CREDENTIALS = {
     "admin": "service123"
 }
 
-# --- INISIALISASI DRAFT INDEPENDEN (ANTI-LOGOUT LOSS) ---
+# --- INISIALISASI DRAFT & GENERASI KEY FORM ---
 if "saved_draft" not in st.session_state:
     st.session_state["saved_draft"] = {
         "cb": "", "cu": "", "mw": "", "status": "Open",
@@ -27,6 +27,10 @@ if "saved_draft" not in st.session_state:
         "t_sig_raw": None,
         "c_sig_raw": None
     }
+
+# Kita butuh Form Version Key untuk memaksa widget teks mendeteksi perubahan saat di-reset
+if "form_version" not in st.session_state:
+    st.session_state["form_version"] = 0
 
 def login_screen():
     st.title("🔐 Finpac Service Portal")
@@ -163,7 +167,7 @@ else:
         current_user = st.session_state.get('user_profile', 'User')
         st.write(f"User: **{current_user}**")
         
-        # TOMBOL RESET DRAFT MANUAL
+        # FIX LOGIC RESET DRAFT: Sekarang menghapus seluruh data teks + tanda tangan total
         if st.button("🗑️ Reset Draft Data", use_container_width=True):
             st.session_state["saved_draft"] = {
                 "cb": "", "cu": "", "mw": "", "status": "Open",
@@ -172,9 +176,11 @@ else:
                 "t_sig_raw": None, "c_sig_raw": None
             }
             if 'final_pdf' in st.session_state: del st.session_state['final_pdf']
+            # Ubah form_version untuk memaksa Streamlit merender ulang widget dari string kosong
+            st.session_state["form_version"] += 1
             st.rerun()
 
-        # TOMBOL LOGOUT AMAN (Draft teks & tanda tangan dijamin aman)
+        # TOMBOL LOGOUT AMAN
         if st.button("🚪 Logout (Keep Draft)", type="secondary", use_container_width=True):
             if "authenticated" in st.session_state: del st.session_state["authenticated"]
             if "user_profile" in st.session_state: del st.session_state["user_profile"]
@@ -190,24 +196,25 @@ else:
     client = get_gspread_client()
 
     draft = st.session_state["saved_draft"]
+    v = st.session_state["form_version"]
 
-    # Render Kolom Input Utama
+    # Render Kolom Input Utama (Ditambahkan variabel key dinamis `{v}` agar sinkron saat tombol reset ditekan)
     col1, col2 = st.columns(2)
     with col1:
-        cb = st.text_input("Technician Name", value=draft.get("cb", ""), key="w_cb", on_change=track_change, args=("cb", "w_cb"))
-        cu = st.text_input("Customer Name", value=draft.get("cu", ""), key="w_cu", on_change=track_change, args=("cu", "w_cu"))
-        mw = st.text_input("Meet With", value=draft.get("mw", ""), key="w_mw", on_change=track_change, args=("mw", "w_mw"))
+        cb = st.text_input("Technician Name", value=draft.get("cb", ""), key=f"w_cb_{v}", on_change=track_change, args=("cb", f"w_cb_{v}"))
+        cu = st.text_input("Customer Name", value=draft.get("cu", ""), key=f"w_cu_{v}", on_change=track_change, args=("cu", f"w_cu_{v}"))
+        mw = st.text_input("Meet With", value=draft.get("mw", ""), key=f"w_mw_{v}", on_change=track_change, args=("mw", f"w_mw_{v}"))
         status_options = ["Open", "Pending", "Closed"]
-        status = st.selectbox("Status", status_options, index=status_options.index(draft.get("status", "Open")), key="w_status", on_change=track_change, args=("status", "w_status"))
+        status = st.selectbox("Status", status_options, index=status_options.index(draft.get("status", "Open")), key=f"w_status_{v}", on_change=track_change, args=("status", f"w_status_{v}"))
     with col2:
-        rd = st.date_input("Date", value=draft.get("rd", date.today()), key="w_rd", on_change=track_change, args=("rd", "w_rd"))
+        rd = st.date_input("Date", value=draft.get("rd", date.today()), key=f"w_rd_{v}", on_change=track_change, args=("rd", f"w_rd_{v}"))
         machine_options = ["Siebler", "Noack", "Kilian", "Promatic", "Truking", "MG2", "FrymaKoruma", "Stephan", "Frewitt", "Lytzen", "Other Machine"]
-        ma = st.selectbox("Machine", machine_options, index=machine_options.index(draft.get("ma", "Siebler")), key="w_ma", on_change=track_change, args=("ma", "w_ma"))
-        ty = st.text_input("Machine Type", value=draft.get("ty", ""), key="w_ty", on_change=track_change, args=("ty", "w_ty"))
-        sn = st.text_input("Serial No", value=draft.get("sn", ""), key="w_sn", on_change=track_change, args=("sn", "w_sn"))
+        ma = st.selectbox("Machine", machine_options, index=machine_options.index(draft.get("ma", "Siebler")), key=f"w_ma_{v}", on_change=track_change, args=("ma", f"w_ma_{v}"))
+        ty = st.text_input("Machine Type", value=draft.get("ty", ""), key=f"w_ty_{v}", on_change=track_change, args=("ty", f"w_ty_{v}"))
+        sn = st.text_input("Serial No", value=draft.get("sn", ""), key=f"w_sn_{v}", on_change=track_change, args=("sn", f"w_sn_{v}"))
         
-    pr = st.text_area("Problem Description", value=draft.get("pr", ""), key="w_pr", on_change=track_change, args=("pr", "w_pr"))
-    fu = st.text_area("Action Taken / Follow Up", value=draft.get("fu", ""), key="w_fu", on_change=track_change, args=("fu", "w_fu"))
+    pr = st.text_area("Problem Description", value=draft.get("pr", ""), key=f"w_pr_{v}", on_change=track_change, args=("pr", f"w_pr_{v}"))
+    fu = st.text_area("Action Taken / Follow Up", value=draft.get("fu", ""), key=f"w_fu_{v}", on_change=track_change, args=("fu", f"w_fu_{v}"))
 
     st.write("---")
     st.write("### Signatures")
@@ -218,14 +225,14 @@ else:
         initial_t_sig = draft.get("t_sig_raw") if isinstance(draft, dict) else None
         
         can_t = st_canvas(
-            stroke_width=2, height=150, width=330, key="t_sig_canvas", 
+            stroke_width=2, height=150, width=330, key=f"t_sig_canvas_{v}", 
             background_color="white", update_streamlit=True,
             initial_drawing=initial_t_sig if initial_t_sig else None
         )
         
+        # FIX LOGIC UNDO/CLEAR: Menghapus batasan "if new_objects", agar saat diclear data kosongnya mau tersimpan ke draft
         if can_t.json_data is not None:
-            new_objects = can_t.json_data.get("objects", [])
-            if new_objects and st.session_state["saved_draft"].get("t_sig_raw") != can_t.json_data:
+            if st.session_state["saved_draft"].get("t_sig_raw") != can_t.json_data:
                 st.session_state["saved_draft"]["t_sig_raw"] = can_t.json_data
 
     with sig_col2:
@@ -233,14 +240,14 @@ else:
         initial_c_sig = draft.get("c_sig_raw") if isinstance(draft, dict) else None
         
         can_c = st_canvas(
-            stroke_width=2, height=150, width=330, key="c_sig_canvas", 
+            stroke_width=2, height=150, width=330, key=f"c_sig_canvas_{v}", 
             background_color="white", update_streamlit=True,
             initial_drawing=initial_c_sig if initial_c_sig else None
         )
         
+        # FIX LOGIC UNDO/CLEAR: Menghapus batasan "if new_objects", agar saat diclear data kosongnya mau tersimpan ke draft
         if can_c.json_data is not None:
-            new_objects = can_c.json_data.get("objects", [])
-            if new_objects and st.session_state["saved_draft"].get("c_sig_raw") != can_c.json_data:
+            if st.session_state["saved_draft"].get("c_sig_raw") != can_c.json_data:
                 st.session_state["saved_draft"]["c_sig_raw"] = can_c.json_data
 
     st.write("---")
@@ -297,6 +304,7 @@ else:
                     }
                     for k in ["final_pdf", "row_data", "pdf_filename"]:
                         if k in st.session_state: del st.session_state[k]
+                    st.session_state["form_version"] += 1
                     st.rerun()
                 except Exception as e:
                     st.error(f"Spreadsheet Error: {e}")
