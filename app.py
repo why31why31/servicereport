@@ -271,7 +271,7 @@ else:
         if st.button("🗑️ Reset Draft Data", use_container_width=True):
             st.session_state["saved_draft"] = {
                 "cb": "", "cu": "", "mw": "", "status": "Open",
-                "rd": date.today(), "ma": "Siebler", "ty": "", "sn": "",
+                "rd": date.today(), "ma": "", "ty": "", "sn": "",
                 "pr": "", "fu": "",
                 "t_sig_raw": None, "c_sig_raw": None
             }
@@ -293,7 +293,7 @@ else:
         caps = [st.text_input(f"Caption {i+1}", key=f"cap_input_{i}") for i in range(len(photo_files))]
 
     st.title("Digital Service Report")
-    st.success("☁️ **Cloud Draft System Enabled:** Even if the web platform completely restarts, your written inputs are safe.")
+    st.success("☁️ **Cloud Draft System Enabled**")
     client = get_gspread_client()
 
     draft = st.session_state["saved_draft"]
