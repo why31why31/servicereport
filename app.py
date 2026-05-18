@@ -18,6 +18,15 @@ USER_CREDENTIALS = {
     "admin": "service123"
 }
 
+# --- INISIALISASI DRAFT INDEPENDEN (DI LUAR WIDGET) ---
+# Inisialisasi dilakukan di awal script agar tidak terpengaruh siklus render widget
+if "saved_draft" not in st.session_state:
+    st.session_state["saved_draft"] = {
+        "cb": "", "cu": "", "mw": "", "status": "Open",
+        "rd": date.today(), "ma": "Siebler", "ty": "", "sn": "",
+        "pr": "", "fu": ""
+    }
+
 def login_screen():
     st.title("🔐 Finpac Service Portal")
     st.write("Please sign in to continue")
@@ -143,11 +152,9 @@ else:
     st.set_page_config(page_title="Finpac Service Report", layout="centered")
     st.markdown("<style>iframe{border:1px solid #ddd !important; border-radius:10px; background-color:white;}</style>", unsafe_allow_html=True)
 
-    # --- INISIALISASI VARIABEL DRAFT ---
-    # Menggunakan key session_state langsung pada input widget agar otomatis tersimpan
-    if "draft_rd" not in st.session_state: st.session_state["draft_rd"] = date.today()
-    if "draft_ma" not in st.session_state: st.session_state["draft_ma"] = "Siebler"
-    if "draft_status" not in st.session_state: st.session_state["draft_status"] = "Open"
+    # Callback untuk menyimpan perubahan isi input ke dict `saved_draft` secara langsung
+    def track_change(field_key, widget_key):
+        st.session_state["saved_draft"][field_key] = st.session_state[widget_key]
 
     # Sidebar Menu
     with st.sidebar:
@@ -157,12 +164,15 @@ else:
         
         # TOMBOL RESET DRAFT MANUAL
         if st.button("🗑️ Reset Draft Data", use_container_width=True):
-            draft_keys = ["draft_cb", "draft_cu", "draft_mw", "draft_rd", "draft_ma", "draft_ty", "draft_sn", "draft_pr", "draft_fu", "draft_status", "final_pdf"]
-            for k in draft_keys:
-                if k in st.session_state: del st.session_state[k]
+            st.session_state["saved_draft"] = {
+                "cb": "", "cu": "", "mw": "", "status": "Open",
+                "rd": date.today(), "ma": "Siebler", "ty": "", "sn": "",
+                "pr": "", "fu": ""
+            }
+            if 'final_pdf' in st.session_state: del st.session_state['final_pdf']
             st.rerun()
 
-        # TOMBOL LOGOUT AMAN (Draft tidak hilang)
+        # TOMBOL LOGOUT AMAN (Draft dijamin tidak hilang)
         if st.button("🚪 Logout (Keep Draft)", type="secondary", use_container_width=True):
             if "authenticated" in st.session_state: del st.session_state["authenticated"]
             if "user_profile" in st.session_state: del st.session_state["user_profile"]
@@ -174,24 +184,31 @@ else:
         caps = [st.text_input(f"Caption {i+1}", key=f"cap_input_{i}") for i in range(len(photo_files))]
 
     st.title("Digital Service Report")
-    st.info("💡 Data yang Anda ketik di bawah otomatis tersimpan sebagai draft meskipun Anda Logout.")
+    st.info("💡 **Draft System Active:** Ketikan Anda tersimpan aman meskipun Anda Logout / ganti user.")
     client = get_gspread_client()
 
-    # Form dengan key terikat ke session_state draft
+    # Load nilai awal widget dari dictionary rancangan (saved_draft)
+    draft = st.session_state["saved_draft"]
+
     col1, col2 = st.columns(2)
     with col1:
-        cb = st.text_input("Technician Name", key="draft_cb")
-        cu = st.text_input("Customer Name", key="draft_cu")
-        mw = st.text_input("Meet With", key="draft_mw")
-        status = st.selectbox("Status", ["Open", "Pending", "Closed"], key="draft_status")
-    with col2:
-        rd = st.date_input("Date", key="draft_rd")
-        ma = st.selectbox("Machine", ["Siebler", "Noack", "Kilian", "Promatic", "Truking", "MG2", "FrymaKoruma", "Stephan", "Frewitt", "Lytzen", "Other Machine"], key="draft_ma")
-        ty = st.text_input("Machine Type", key="draft_ty")
-        sn = st.text_input("Serial No", key="draft_sn")
+        cb = st.text_input("Technician Name", value=draft["cb"], key="w_cb", on_change=track_change, args=("cb", "w_cb"))
+        cu = st.text_input("Customer Name", value=draft["cu"], key="w_cu", on_change=track_change, args=("cu", "w_cu"))
+        mw = st.text_input("Meet With", value=draft["mw"], key="w_mw", on_change=track_change, args=("mw", "w_mw"))
         
-    pr = st.text_area("Problem Description", key="draft_pr")
-    fu = st.text_area("Action Taken / Follow Up", key="draft_fu")
+        status_options = ["Open", "Pending", "Closed"]
+        status = st.selectbox("Status", status_options, index=status_options.index(draft["status"]), key="w_status", on_change=track_change, args=("status", "w_status"))
+    with col2:
+        rd = st.date_input("Date", value=draft["rd"], key="w_rd", on_change=track_change, args=("rd", "w_rd"))
+        
+        machine_options = ["Siebler", "Noack", "Kilian", "Promatic", "Truking", "MG2", "FrymaKoruma", "Stephan", "Frewitt", "Lytzen", "Other Machine"]
+        ma = st.selectbox("Machine", machine_options, index=machine_options.index(draft["ma"]), key="w_ma", on_change=track_change, args=("ma", "w_ma"))
+        
+        ty = st.text_input("Machine Type", value=draft["ty"], key="w_ty", on_change=track_change, args=("ty", "w_ty"))
+        sn = st.text_input("Serial No", value=draft["sn"], key="w_sn", on_change=track_change, args=("sn", "w_sn"))
+        
+    pr = st.text_area("Problem Description", value=draft["pr"], key="w_pr", on_change=track_change, args=("pr", "w_pr"))
+    fu = st.text_area("Action Taken / Follow Up", value=draft["fu"], key="w_fu", on_change=track_change, args=("fu", "w_fu"))
 
     st.write("---")
     st.write("### Signatures")
@@ -243,9 +260,13 @@ else:
                     sheet.sort((1, 'asc'), range='A2:K5000')
                     st.success("Data Saved!")
                     
-                    # Bersihkan data formulir & PDF lama setelah sukses masuk Excel (kembali kosong)
-                    all_keys = ["final_pdf", "row_data", "pdf_filename", "draft_cb", "draft_cu", "draft_mw", "draft_ty", "draft_sn", "draft_pr", "draft_fu"]
-                    for k in all_keys:
+                    # Bersihkan draft & PDF setelah berhasil masuk spreadsheet (kembali kosong)
+                    st.session_state["saved_draft"] = {
+                        "cb": "", "cu": "", "mw": "", "status": "Open",
+                        "rd": date.today(), "ma": "Siebler", "ty": "", "sn": "",
+                        "pr": "", "fu": ""
+                    }
+                    for k in ["final_pdf", "row_data", "pdf_filename"]:
                         if k in st.session_state: del st.session_state[k]
                     st.rerun()
                 except Exception as e:
