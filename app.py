@@ -18,14 +18,14 @@ USER_CREDENTIALS = {
     "admin": "service123"
 }
 
-# --- INISIALISASI DRAFT INDEPENDEN (TERMASUK STRUKTUR CANVAS) ---
+# --- INISIALISASI DRAFT INDEPENDEN ---
 if "saved_draft" not in st.session_state:
     st.session_state["saved_draft"] = {
         "cb": "", "cu": "", "mw": "", "status": "Open",
         "rd": date.today(), "ma": "Siebler", "ty": "", "sn": "",
         "pr": "", "fu": "",
-        "t_sig_raw": None, # Mengunci riwayat koordinat tanda tangan teknisi
-        "c_sig_raw": None  # Mengunci riwayat koordinat tanda tangan customer
+        "t_sig_raw": None,
+        "c_sig_raw": None
     }
 
 # Versi form digunakan untuk memaksa widget teks & canvas melakukan pembersihan total di layar monitor
@@ -166,7 +166,7 @@ else:
         current_user = st.session_state.get('user_profile', 'User')
         st.write(f"User: **{current_user}**")
         
-        # PERBAIKAN UTAMA TOMBOL RESET DRAFT: Sekarang membersihkan teks dan gambar coretan secara total
+        # TOMBOL RESET DRAFT MANUAL TOTAL
         if st.button("🗑️ Reset Draft Data", use_container_width=True):
             st.session_state["saved_draft"] = {
                 "cb": "", "cu": "", "mw": "", "status": "Open",
@@ -175,7 +175,6 @@ else:
                 "t_sig_raw": None, "c_sig_raw": None
             }
             if 'final_pdf' in st.session_state: del st.session_state['final_pdf']
-            # Ubah nomor versi form_version untuk merusak cache internal key teks & canvas
             st.session_state["form_version"] += 1
             st.rerun()
 
@@ -196,7 +195,7 @@ else:
     draft = st.session_state["saved_draft"]
     v = st.session_state["form_version"]
 
-    # Ditambahkan parameter variable dynamic `_{v}` pada key agar teks menghilang saat ditekan reset
+    # Render Kolom Input Utama
     col1, col2 = st.columns(2)
     with col1:
         cb = st.text_input("Technician Name", value=draft.get("cb", ""), key=f"w_cb_{v}", on_change=track_change, args=("cb", f"w_cb_{v}"))
@@ -220,35 +219,25 @@ else:
     
     with sig_col1:
         st.caption("Technician Signature")
-        initial_t_sig = draft.get("t_sig_raw") if isinstance(draft, dict) else None
+        initial_t_sig = draft.get("t_sig_raw")
         
-        # Ditambahkan key versi dynamic `_{v}` agar canvas mendeteksi paksaan pembersihan data dari tombol reset
+        # Render canvas murni. Tombol Trash/Undo bawaan komponen dijamin 100% normal tanpa loop macet
         can_t = st_canvas(
             stroke_width=2, height=150, width=330, key=f"t_sig_canvas_{v}", 
             background_color="white", update_streamlit=True,
             initial_drawing=initial_t_sig if initial_t_sig else None
         )
-        
-        # PERBAIKAN LOGIK UNDO/CLEAR KANVAS: Menyimpan seluruh status pixel (termasuk kosong) langsung ke memori draft
-        if can_t.json_data is not None:
-            if st.session_state["saved_draft"].get("t_sig_raw") != can_t.json_data:
-                st.session_state["saved_draft"]["t_sig_raw"] = can_t.json_data
 
     with sig_col2:
         st.caption("Customer Signature")
-        initial_c_sig = draft.get("c_sig_raw") if isinstance(draft, dict) else None
+        initial_c_sig = draft.get("c_sig_raw")
         
-        # Ditambahkan key versi dynamic `_{v}` agar canvas mendeteksi paksaan pembersihan data dari tombol reset
+        # Render canvas murni. Tombol Trash/Undo bawaan komponen dijamin 100% normal tanpa loop macet
         can_c = st_canvas(
             stroke_width=2, height=150, width=330, key=f"c_sig_canvas_{v}", 
             background_color="white", update_streamlit=True,
             initial_drawing=initial_c_sig if initial_c_sig else None
         )
-        
-        # PERBAIKAN LOGIK UNDO/CLEAR KANVAS: Menyimpan seluruh status pixel (termasuk kosong) langsung ke memori draft
-        if can_c.json_data is not None:
-            if st.session_state["saved_draft"].get("c_sig_raw") != can_c.json_data:
-                st.session_state["saved_draft"]["c_sig_raw"] = can_c.json_data
 
     st.write("---")
     if st.button("🚀 GENERATE PDF REPORT", type="primary", use_container_width=True):
@@ -262,7 +251,10 @@ else:
                 img.thumbnail((800, 800))
                 report_photos.append({'img': img, 'cap': caps[i]})
             
-            # Deteksi objek tanda tangan secara dinamis sebelum masuk ke berkas PDF
+            # AMANKAN KONDISI CORETIAN SAAT INI MASUK DRAFT FORM SEBELUM GENERATE PDF
+            st.session_state["saved_draft"]["t_sig_raw"] = can_t.json_data if can_t.json_data else None
+            st.session_state["saved_draft"]["c_sig_raw"] = can_c.json_data if can_c.json_data else None
+            
             s_t = None
             if can_t.image_data is not None and can_t.json_data and can_t.json_data.get("objects"):
                 s_t = Image.fromarray(can_t.image_data.astype('uint8'))
@@ -276,7 +268,7 @@ else:
             
             st.session_state['row_data'] = [str(rd), rd.strftime("%A"), cu, ma, ty, sn, pr, fu, cb, status]
             st.session_state['pdf_filename'] = f"Report_{cu}_{rd}.pdf"
-            st.success("PDF Generated Successfully!")
+            st.success("PDF Generated Successfully! Tanda tangan tersimpan dalam draft.")
 
     if 'final_pdf' in st.session_state:
         st.write("---")
@@ -296,7 +288,7 @@ else:
                     sheet.sort((1, 'asc'), range='A2:K5000')
                     st.success("Data Saved!")
                     
-                    # Bersihkan data rancangan total dan kembalikan monitor ke keadaan kosong sempurna
+                    # Reset data total setelah submit berhasil dilakukan
                     st.session_state["saved_draft"] = {
                         "cb": "", "cu": "", "mw": "", "status": "Open",
                         "rd": date.today(), "ma": "Siebler", "ty": "", "sn": "",
