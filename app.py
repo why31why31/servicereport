@@ -19,13 +19,18 @@ USER_CREDENTIALS = {
 }
 
 # --- INISIALISASI DRAFT INDEPENDEN (DI LUAR WIDGET) ---
-# Inisialisasi dilakukan di awal script agar tidak terpengaruh siklus render widget
 if "saved_draft" not in st.session_state:
     st.session_state["saved_draft"] = {
         "cb": "", "cu": "", "mw": "", "status": "Open",
         "rd": date.today(), "ma": "Siebler", "ty": "", "sn": "",
-        "pr": "", "fu": ""
+        "pr": "", "fu": "",
+        "t_sig_raw": None,
+        "c_sig_raw": None
     }
+
+# Versi form digunakan untuk memaksa refresh widget teks saat reset/clear ditekan
+if "form_version" not in st.session_state:
+    st.session_state["form_version"] = 0
 
 def login_screen():
     st.title("🔐 Finpac Service Portal")
@@ -152,7 +157,6 @@ else:
     st.set_page_config(page_title="Finpac Service Report", layout="centered")
     st.markdown("<style>iframe{border:1px solid #ddd !important; border-radius:10px; background-color:white;}</style>", unsafe_allow_html=True)
 
-    # Callback untuk menyimpan perubahan isi input ke dict `saved_draft` secara langsung
     def track_change(field_key, widget_key):
         st.session_state["saved_draft"][field_key] = st.session_state[widget_key]
 
@@ -162,17 +166,19 @@ else:
         current_user = st.session_state.get('user_profile', 'User')
         st.write(f"User: **{current_user}**")
         
-        # TOMBOL RESET DRAFT MANUAL
+        # PERBAIKAN TOMBOL RESET DRAFT: Sekarang membersihkan seluruh teks input di monitor
         if st.button("🗑️ Reset Draft Data", use_container_width=True):
             st.session_state["saved_draft"] = {
                 "cb": "", "cu": "", "mw": "", "status": "Open",
                 "rd": date.today(), "ma": "Siebler", "ty": "", "sn": "",
-                "pr": "", "fu": ""
+                "pr": "", "fu": "",
+                "t_sig_raw": None, "c_sig_raw": None
             }
             if 'final_pdf' in st.session_state: del st.session_state['final_pdf']
+            # Naikkan nomor versi untuk merubah key widget input agar layarnya bersih kembali
+            st.session_state["form_version"] += 1
             st.rerun()
 
-        # TOMBOL LOGOUT AMAN (Draft dijamin tidak hilang)
         if st.button("🚪 Logout (Keep Draft)", type="secondary", use_container_width=True):
             if "authenticated" in st.session_state: del st.session_state["authenticated"]
             if "user_profile" in st.session_state: del st.session_state["user_profile"]
@@ -184,41 +190,63 @@ else:
         caps = [st.text_input(f"Caption {i+1}", key=f"cap_input_{i}") for i in range(len(photo_files))]
 
     st.title("Digital Service Report")
-    st.info("💡 **Draft System Active:** Ketikan Anda tersimpan aman meskipun Anda Logout / ganti user.")
+    st.info("💡 **Draft System Active:** Ketikan dan Tanda Tangan Anda tersimpan otomatis meskipun Anda Logout.")
     client = get_gspread_client()
 
-    # Load nilai awal widget dari dictionary rancangan (saved_draft)
     draft = st.session_state["saved_draft"]
+    v = st.session_state["form_version"]
 
+    # Setiap widget diberi postfix key `_{v}` agar merender ulang nilainya saat form di-reset
     col1, col2 = st.columns(2)
     with col1:
-        cb = st.text_input("Technician Name", value=draft["cb"], key="w_cb", on_change=track_change, args=("cb", "w_cb"))
-        cu = st.text_input("Customer Name", value=draft["cu"], key="w_cu", on_change=track_change, args=("cu", "w_cu"))
-        mw = st.text_input("Meet With", value=draft["mw"], key="w_mw", on_change=track_change, args=("mw", "w_mw"))
-        
+        cb = st.text_input("Technician Name", value=draft.get("cb", ""), key=f"w_cb_{v}", on_change=track_change, args=("cb", f"w_cb_{v}"))
+        cu = st.text_input("Customer Name", value=draft.get("cu", ""), key=f"w_cu_{v}", on_change=track_change, args=("cu", f"w_cu_{v}"))
+        mw = st.text_input("Meet With", value=draft.get("mw", ""), key=f"w_mw_{v}", on_change=track_change, args=("mw", f"w_mw_{v}"))
         status_options = ["Open", "Pending", "Closed"]
-        status = st.selectbox("Status", status_options, index=status_options.index(draft["status"]), key="w_status", on_change=track_change, args=("status", "w_status"))
+        status = st.selectbox("Status", status_options, index=status_options.index(draft.get("status", "Open")), key=f"w_status_{v}", on_change=track_change, args=("status", f"w_status_{v}"))
     with col2:
-        rd = st.date_input("Date", value=draft["rd"], key="w_rd", on_change=track_change, args=("rd", "w_rd"))
-        
+        rd = st.date_input("Date", value=draft.get("rd", date.today()), key=f"w_rd_{v}", on_change=track_change, args=("rd", f"w_rd_{v}"))
         machine_options = ["Siebler", "Noack", "Kilian", "Promatic", "Truking", "MG2", "FrymaKoruma", "Stephan", "Frewitt", "Lytzen", "Other Machine"]
-        ma = st.selectbox("Machine", machine_options, index=machine_options.index(draft["ma"]), key="w_ma", on_change=track_change, args=("ma", "w_ma"))
+        ma = st.selectbox("Machine", machine_options, index=machine_options.index(draft.get("ma", "Siebler")), key=f"w_ma_{v}", on_change=track_change, args=("ma", f"w_ma_{v}"))
+        ty = st.text_input("Machine Type", value=draft.get("ty", ""), key=f"w_ty_{v}", on_change=track_change, args=("ty", f"w_ty_{v}"))
+        sn = st.text_input("Serial No", value=draft.get("sn", ""), key=f"w_sn_{v}", on_change=track_change, args=("sn", f"w_sn_{v}"))
         
-        ty = st.text_input("Machine Type", value=draft["ty"], key="w_ty", on_change=track_change, args=("ty", "w_ty"))
-        sn = st.text_input("Serial No", value=draft["sn"], key="w_sn", on_change=track_change, args=("sn", "w_sn"))
-        
-    pr = st.text_area("Problem Description", value=draft["pr"], key="w_pr", on_change=track_change, args=("pr", "w_pr"))
-    fu = st.text_area("Action Taken / Follow Up", value=draft["fu"], key="w_fu", on_change=track_change, args=("fu", "w_fu"))
+    pr = st.text_area("Problem Description", value=draft.get("pr", ""), key=f"w_pr_{v}", on_change=track_change, args=("pr", f"w_pr_{v}"))
+    fu = st.text_area("Action Taken / Follow Up", value=draft.get("fu", ""), key=f"w_fu_{v}", on_change=track_change, args=("fu", f"w_fu_{v}"))
 
     st.write("---")
     st.write("### Signatures")
     sig_col1, sig_col2 = st.columns(2)
+    
     with sig_col1:
         st.caption("Technician Signature")
-        can_t = st_canvas(stroke_width=2, height=150, width=330, key="t_sig", background_color="white", update_streamlit=True)
+        initial_t_sig = draft.get("t_sig_raw") if isinstance(draft, dict) else None
+        
+        can_t = st_canvas(
+            stroke_width=2, height=150, width=330, key=f"t_sig_canvas_{v}", 
+            background_color="white", update_streamlit=True,
+            initial_drawing=initial_t_sig if initial_t_sig else None
+        )
+        
+        # PERBAIKAN LOGIK CLEAR/UNDO: Menyimpan perubahan data mentah objek secara langsung ke draft
+        if can_t.json_data is not None:
+            if st.session_state["saved_draft"].get("t_sig_raw") != can_t.json_data:
+                st.session_state["saved_draft"]["t_sig_raw"] = can_t.json_data
+
     with sig_col2:
         st.caption("Customer Signature")
-        can_c = st_canvas(stroke_width=2, height=150, width=330, key="c_sig", background_color="white", update_streamlit=True)
+        initial_c_sig = draft.get("c_sig_raw") if isinstance(draft, dict) else None
+        
+        can_c = st_canvas(
+            stroke_width=2, height=150, width=330, key=f"c_sig_canvas_{v}", 
+            background_color="white", update_streamlit=True,
+            initial_drawing=initial_c_sig if initial_c_sig else None
+        )
+        
+        # PERBAIKAN LOGIK CLEAR/UNDO: Menyimpan perubahan data mentah objek secara langsung ke draft
+        if can_c.json_data is not None:
+            if st.session_state["saved_draft"].get("c_sig_raw") != can_c.json_data:
+                st.session_state["saved_draft"]["c_sig_raw"] = can_c.json_data
 
     st.write("---")
     if st.button("🚀 GENERATE PDF REPORT", type="primary", use_container_width=True):
@@ -232,8 +260,14 @@ else:
                 img.thumbnail((800, 800))
                 report_photos.append({'img': img, 'cap': caps[i]})
             
-            s_t = Image.fromarray(can_t.image_data.astype('uint8')) if can_t.image_data is not None else None
-            s_c = Image.fromarray(can_c.image_data.astype('uint8')) if can_c.image_data is not None else None
+            # Deteksi objek tanda tangan secara dinamis sebelum di-render masuk FPDF Engine
+            s_t = None
+            if can_t.image_data is not None and can_t.json_data and can_t.json_data.get("objects"):
+                s_t = Image.fromarray(can_t.image_data.astype('uint8'))
+                
+            s_c = None
+            if can_c.image_data is not None and can_c.json_data and can_c.json_data.get("objects"):
+                s_c = Image.fromarray(can_c.image_data.astype('uint8'))
             
             bundle = {'cb': cb, 'cu': cu, 'mw': mw, 'rd': str(rd), 'ma': ma, 'ty': ty, 'sn': sn, 'pr': pr, 'fu': fu}
             st.session_state['final_pdf'] = create_pdf(bundle, s_t, s_c, logo_path, report_photos)
@@ -260,14 +294,16 @@ else:
                     sheet.sort((1, 'asc'), range='A2:K5000')
                     st.success("Data Saved!")
                     
-                    # Bersihkan draft & PDF setelah berhasil masuk spreadsheet (kembali kosong)
+                    # Reset data total dan bersihkan monitor form teks & canvas tanda tangan
                     st.session_state["saved_draft"] = {
                         "cb": "", "cu": "", "mw": "", "status": "Open",
                         "rd": date.today(), "ma": "Siebler", "ty": "", "sn": "",
-                        "pr": "", "fu": ""
+                        "pr": "", "fu": "",
+                        "t_sig_raw": None, "c_sig_raw": None
                     }
                     for k in ["final_pdf", "row_data", "pdf_filename"]:
                         if k in st.session_state: del st.session_state[k]
+                    st.session_state["form_version"] += 1
                     st.rerun()
                 except Exception as e:
                     st.error(f"Spreadsheet Error: {e}")
