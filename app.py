@@ -2,12 +2,13 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime, date
 from fpdf import FPDF, XPos, YPos
-from streamlit_drawable_canvas import st_canvas  # <-- ADD THIS EXPLICIT IMPORT
+from streamlit_drawable_canvas import st_canvas
 from PIL import Image
 import os
 import io  
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
+import json
 
 # --- 1. USER ACCESS CONFIG ---
 USER_CREDENTIALS = {
@@ -19,7 +20,108 @@ USER_CREDENTIALS = {
     "admin": "service123"
 }
 
-# --- INDEPENDENT DRAFT INITIALIZATION ---
+# --- 2. GOOGLE SHEETS CONFIG ---
+SPREADSHEET_ID = "1g7P6Xkm-G6JE1UR1GLOJ63HISknqdlH21viT2JoC4PY"
+WORKSHEET_NAME = "Daily Report Technic New (2026)"
+DRAFT_WORKSHEET_NAME = "Drafts"
+
+def get_gspread_client():
+    try:
+        if "gcp_service_account" in st.secrets:
+            creds_info = dict(st.secrets["gcp_service_account"])
+            scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+            creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_info, scope)
+            return gspread.authorize(creds)
+    except Exception as e:
+        return None
+
+# --- DATABASE PERSISTENCE FUNCTIONS ---
+def save_draft_to_cloud(user_profile):
+    """Saves current text draft inputs to the Google Sheet 'Drafts' tab asynchronously."""
+    client = get_gspread_client()
+    if not client:
+        return
+    try:
+        spreadsheet = client.open_by_key(SPREADSHEET_ID)
+        try:
+            sheet = spreadsheet.worksheet(DRAFT_WORKSHEET_NAME)
+        except gspread.exceptions.WorksheetNotFound:
+            # Fallback if user forgot to create the sheet manually
+            sheet = spreadsheet.add_worksheet(title=DRAFT_WORKSHEET_NAME, rows="100", cols="15")
+            sheet.append_row(["User", "cb", "cu", "mw", "status", "rd", "ma", "ty", "sn", "pr", "fu", "timestamp"])
+        
+        draft = st.session_state["saved_draft"]
+        
+        # Prepare data row
+        row_data = [
+            user_profile,
+            draft.get("cb", ""),
+            draft.get("cu", ""),
+            draft.get("mw", ""),
+            draft.get("status", "Open"),
+            str(draft.get("rd", date.today())),
+            draft.get("ma", "Siebler"),
+            draft.get("ty", ""),
+            draft.get("sn", ""),
+            draft.get("pr", ""),
+            draft.get("fu", ""),
+            datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        ]
+        
+        # Check if a row already exists for this specific logged-in user
+        cell = sheet.find(user_profile, in_column=1)
+        if cell:
+            # Update existing row
+            sheet.update(range_name=f"A{cell.row}:L{cell.row}", values=[row_data])
+        else:
+            # Append new user row
+            sheet.append_row(row_data, value_input_option='USER_ENTERED')
+    except Exception as e:
+        pass  # Fail silently to avoid breaking input typing flow
+
+def load_draft_from_cloud(user_profile):
+    """Loads text draft fields from Google Sheets upon initial login or system reboot."""
+    client = get_gspread_client()
+    if not client:
+        return
+    try:
+        spreadsheet = client.open_by_key(SPREADSHEET_ID)
+        sheet = spreadsheet.worksheet(DRAFT_WORKSHEET_NAME)
+        cell = sheet.find(user_profile, in_column=1)
+        if cell:
+            row = sheet.row_values(cell.row)
+            # Match Sheet index structure to populate dictionary safely
+            st.session_state["saved_draft"]["cb"] = row[1] if len(row) > 1 else ""
+            st.session_state["saved_draft"]["cu"] = row[2] if len(row) > 2 else ""
+            st.session_state["saved_draft"]["mw"] = row[3] if len(row) > 3 else ""
+            st.session_state["saved_draft"]["status"] = row[4] if len(row) > 4 else "Open"
+            try:
+                st.session_state["saved_draft"]["rd"] = datetime.strptime(row[5], "%Y-%m-%d").date() if len(row) > 5 else date.today()
+            except:
+                st.session_state["saved_draft"]["rd"] = date.today()
+            st.session_state["saved_draft"]["ma"] = row[6] if len(row) > 6 else "Siebler"
+            st.session_state["saved_draft"]["ty"] = row[7] if len(row) > 7 else ""
+            st.session_state["saved_draft"]["sn"] = row[8] if len(row) > 8 else ""
+            st.session_state["saved_draft"]["pr"] = row[9] if len(row) > 9 else ""
+            st.session_state["saved_draft"]["fu"] = row[10] if len(row) > 10 else ""
+    except Exception as e:
+        pass
+
+def delete_cloud_draft(user_profile):
+    """Deletes user's text backup row from the cloud database upon form compilation reset."""
+    client = get_gspread_client()
+    if not client:
+        return
+    try:
+        spreadsheet = client.open_by_key(SPREADSHEET_ID)
+        sheet = spreadsheet.worksheet(DRAFT_WORKSHEET_NAME)
+        cell = sheet.find(user_profile, in_column=1)
+        if cell:
+            sheet.delete_rows(cell.row)
+    except Exception as e:
+        pass
+
+# --- INDEPENDENT LOCAL RAM INITIALIZATION ---
 if "saved_draft" not in st.session_state:
     st.session_state["saved_draft"] = {
         "cb": "", "cu": "", "mw": "", "status": "Open",
@@ -29,9 +131,11 @@ if "saved_draft" not in st.session_state:
         "c_sig_raw": None
     }
 
-# Form version key used to force clear all visual elements on reset
 if "form_version" not in st.session_state:
     st.session_state["form_version"] = 0
+
+if "cloud_sync_completed" not in st.session_state:
+    st.session_state["cloud_sync_completed"] = False
 
 def login_screen():
     st.title("🔐 Finpac Service Portal")
@@ -43,23 +147,10 @@ def login_screen():
             if user in USER_CREDENTIALS and USER_CREDENTIALS[user] == pw:
                 st.session_state["authenticated"] = True
                 st.session_state["user_profile"] = user
+                st.session_state["cloud_sync_completed"] = False  # Reset sync trigger for fresh user fetch
                 st.rerun()
             else:
                 st.error("Invalid Username or Password")
-
-# --- 2. GOOGLE SHEETS CONFIG ---
-SPREADSHEET_ID = "1g7P6Xkm-G6JE1UR1GLOJ63HISknqdlH21viT2JoC4PY"
-WORKSHEET_NAME = "Daily Report Technic New (2026)"
-
-def get_gspread_client():
-    try:
-        if "gcp_service_account" in st.secrets:
-            creds_info = dict(st.secrets["gcp_service_account"])
-            scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-            creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_info, scope)
-            return gspread.authorize(creds)
-    except Exception as e:
-        return None
 
 # --- UTILS: UNICODE TEXT CLEANER ---
 def clean_text(text):
@@ -158,13 +249,22 @@ else:
     st.set_page_config(page_title="Finpac Service Report", layout="centered")
     st.markdown("<style>iframe{border:1px solid #ddd !important; border-radius:10px; background-color:white;}</style>", unsafe_allow_html=True)
 
+    current_user = st.session_state.get('user_profile', 'User')
+
+    # One-time initialization pull from Google Sheet database if server restarted
+    if not st.session_state["cloud_sync_completed"]:
+        load_draft_from_cloud(current_user)
+        st.session_state["cloud_sync_completed"] = True
+        st.rerun()
+
+    # Callback intercept to update changes both locally and into the cloud spreadsheet row
     def track_change(field_key, widget_key):
         st.session_state["saved_draft"][field_key] = st.session_state[widget_key]
+        save_draft_to_cloud(current_user)
 
     # Sidebar Menu
     with st.sidebar:
         st.header("App Menu")
-        current_user = st.session_state.get('user_profile', 'User')
         st.write(f"User: **{current_user}**")
         
         # MANUAL RESET DRAFT BUTTON
@@ -176,6 +276,7 @@ else:
                 "t_sig_raw": None, "c_sig_raw": None
             }
             if 'final_pdf' in st.session_state: del st.session_state['final_pdf']
+            delete_cloud_draft(current_user)  # Clear sheet row too
             st.session_state["form_version"] += 1
             st.rerun()
 
@@ -183,6 +284,7 @@ else:
         if st.button("🚪 Logout (Keep Draft)", type="secondary", use_container_width=True):
             if "authenticated" in st.session_state: del st.session_state["authenticated"]
             if "user_profile" in st.session_state: del st.session_state["user_profile"]
+            st.session_state["cloud_sync_completed"] = False
             st.rerun()
         
         st.write("---")
@@ -191,13 +293,13 @@ else:
         caps = [st.text_input(f"Caption {i+1}", key=f"cap_input_{i}") for i in range(len(photo_files))]
 
     st.title("Digital Service Report")
-    st.info("💡 **Draft System Active:** Your typed data and signatures are saved automatically even if you logout.")
+    st.success("☁️ **Cloud Draft System Enabled:** Even if the web platform completely restarts, your written inputs are safe.")
     client = get_gspread_client()
 
     draft = st.session_state["saved_draft"]
     v = st.session_state["form_version"]
 
-    # Main Input Form Grid
+    # Main Form Inputs
     col1, col2 = st.columns(2)
     with col1:
         cb = st.text_input("Technician Name", value=draft.get("cb", ""), key=f"w_cb_{v}", on_change=track_change, args=("cb", f"w_cb_{v}"))
@@ -222,7 +324,6 @@ else:
     with sig_col1:
         st.caption("Technician Signature")
         initial_t_sig = draft.get("t_sig_raw")
-        
         can_t = st_canvas(
             stroke_width=2, height=150, width=330, key=f"t_sig_canvas_{v}", 
             background_color="white", update_streamlit=True,
@@ -232,7 +333,6 @@ else:
     with sig_col2:
         st.caption("Customer Signature")
         initial_c_sig = draft.get("c_sig_raw")
-        
         can_c = st_canvas(
             stroke_width=2, height=150, width=330, key=f"c_sig_canvas_{v}", 
             background_color="white", update_streamlit=True,
@@ -250,15 +350,10 @@ else:
             # PHOTO COMPRESSION LOGIC
             for i, pf in enumerate(photo_files):
                 img = Image.open(pf)
-                
-                # Step 1: Max bounding box downscaling (keeps aspect ratio)
                 img.thumbnail((800, 800))
-                
-                # Step 2: Convert to RGB mode if it's RGBA (JPEG doesn't support transparency channels)
                 if img.mode in ("RGBA", "P"):
                     img = img.convert("RGB")
                 
-                # Step 3: Streamlit in-memory buffer compression (Quality 75 + JPEG Quantization Optimization)
                 buffer = io.BytesIO()
                 img.save(buffer, format="JPEG", quality=75, optimize=True)
                 buffer.seek(0)
@@ -266,7 +361,7 @@ else:
                 compressed_img = Image.open(buffer)
                 report_photos.append({'img': compressed_img, 'cap': caps[i]})
             
-            # Save signature raw JSON to draft data when generating PDF
+            # Lock visual coordinates into memory state on generation
             st.session_state["saved_draft"]["t_sig_raw"] = can_t.json_data if can_t.json_data else None
             st.session_state["saved_draft"]["c_sig_raw"] = can_c.json_data if can_c.json_data else None
             
@@ -283,7 +378,7 @@ else:
             
             st.session_state['row_data'] = [str(rd), rd.strftime("%A"), cu, ma, ty, sn, pr, fu, cb, status]
             st.session_state['pdf_filename'] = f"Report_{cu}_{rd}.pdf"
-            st.success("PDF Generated Successfully! Photos compressed & signatures securely saved in draft.")
+            st.success("PDF Generated Successfully! Draft values secured.")
 
     if 'final_pdf' in st.session_state:
         st.write("---")
@@ -303,7 +398,8 @@ else:
                     sheet.sort((1, 'asc'), range='A2:K5000')
                     st.success("Data Saved Successfully!")
                     
-                    # Clear out data model states to refresh back to default empty fields
+                    # Clear out both memory session state AND drop cloud backup row upon successful compilation
+                    delete_cloud_draft(current_user)
                     st.session_state["saved_draft"] = {
                         "cb": "", "cu": "", "mw": "", "status": "Open",
                         "rd": date.today(), "ma": "Siebler", "ty": "", "sn": "",
