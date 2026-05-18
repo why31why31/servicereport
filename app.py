@@ -2,9 +2,9 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime, date
 from fpdf import FPDF, XPos, YPos
-from streamlit_drawable_canvas import st_canvas
 from PIL import Image
 import os
+import io  # Added for in-memory image compression handling
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 
@@ -245,10 +245,25 @@ else:
         else:
             logo_path = "logo.png" 
             report_photos = []
+            
+            # PHOTO COMPRESSION LOGIC
             for i, pf in enumerate(photo_files):
                 img = Image.open(pf)
+                
+                # Step 1: Max bounding box downscaling (keeps aspect ratio)
                 img.thumbnail((800, 800))
-                report_photos.append({'img': img, 'cap': caps[i]})
+                
+                # Step 2: Convert to RGB mode if it's RGBA (JPEG doesn't support transparency channels)
+                if img.mode in ("RGBA", "P"):
+                    img = img.convert("RGB")
+                
+                # Step 3: Streamlit in-memory buffer compression (Quality 75 + JPEG Quantization Optimization)
+                buffer = io.BytesIO()
+                img.save(buffer, format="JPEG", quality=75, optimize=True)
+                buffer.seek(0)
+                
+                compressed_img = Image.open(buffer)
+                report_photos.append({'img': compressed_img, 'cap': caps[i]})
             
             # Save signature raw JSON to draft data when generating PDF
             st.session_state["saved_draft"]["t_sig_raw"] = can_t.json_data if can_t.json_data else None
@@ -267,7 +282,7 @@ else:
             
             st.session_state['row_data'] = [str(rd), rd.strftime("%A"), cu, ma, ty, sn, pr, fu, cb, status]
             st.session_state['pdf_filename'] = f"Report_{cu}_{rd}.pdf"
-            st.success("PDF Generated Successfully! Signatures are securely saved in draft.")
+            st.success("PDF Generated Successfully! Photos compressed & signatures securely saved in draft.")
 
     if 'final_pdf' in st.session_state:
         st.write("---")
