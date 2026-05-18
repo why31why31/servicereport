@@ -46,6 +46,28 @@ def get_gspread_client():
     except:
         return None
 
+# --- UTILS: UNICODE TEXT CLEANER ---
+def clean_text(text):
+    if not text: 
+        return ""
+    # Mengonversi karakter khusus/simbol teknik agar aman dibaca font bawaan PDF (latin-1)
+    replacements = {
+        '\u2013': '-',     # en-dash
+        '\u2014': '-',     # em-dash
+        '\u201c': '"',     # smart quote left
+        '\u201d': '"',     # smart quote right
+        '\u2018': "'",     # smart apostrophe left
+        '\u2019': "'",     # smart apostrophe right
+        '\xb0': ' deg ',   # mengubah simbol derajat ° menjadi teks ' deg '
+        '\xb1': '+/-',     # simbol kurang lebih ±
+        '\xb5': 'u',       # micro symbol µ
+    }
+    for original, replacement in replacements.items():
+        text = text.replace(original, replacement)
+    
+    # Abaikan karakter asing tak terdaftar lainnya yang bisa memicu FPDF Unicode Crash
+    return text.encode('latin-1', 'ignore').decode('latin-1')
+
 # --- 3. PDF ENGINE ---
 class PDF(FPDF):
     def __init__(self, logo_path=None):
@@ -72,9 +94,9 @@ def create_pdf(data, s_t, s_c, logo_path, photos):
     
     pdf.set_font("helvetica", 'B', 9); pdf.set_fill_color(245, 245, 245)
     fields = [
-        [("Technician", data['cb']), ("Date", data['rd'])],
-        [("Customer", data['cu']), ("Meet with", data['mw'])],
-        [("Machine", data['ma']), ("Type", data['ty']), ("S/N", data['sn'])]
+        [("Technician", clean_text(data['cb'])), ("Date", clean_text(data['rd']))],
+        [("Customer", clean_text(data['cu'])), ("Meet with", clean_text(data['mw']))],
+        [("Machine", clean_text(data['ma'])), ("Type", clean_text(data['ty'])), ("S/N", clean_text(data['sn']))]
     ]
     for row in fields:
         for label, value in row:
@@ -84,10 +106,13 @@ def create_pdf(data, s_t, s_c, logo_path, photos):
     
     pdf.ln(2); pdf.set_font("helvetica", 'B', 10)
     pdf.cell(0, 7, "PROBLEM DESCRIPTION", border='B', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-    pdf.set_font("helvetica", '', 10); pdf.multi_cell(0, 6, data['pr']); pdf.ln(3)
+    pdf.set_font("helvetica", '', 10)
+    pdf.multi_cell(0, 6, clean_text(data['pr'])) # Proteksi teks problem dari crash
+    pdf.ln(3)
     
     pdf.cell(0, 7, "FOLLOW UP ACTION", border='B', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-    pdf.set_font("helvetica", '', 10); pdf.multi_cell(0, 6, data['fu'])
+    pdf.set_font("helvetica", '', 10)
+    pdf.multi_cell(0, 6, clean_text(data['fu'])) # FIX SOLUSI CRASH: Teks dibersihkan otomatis di sini
 
     if photos:
         if pdf.get_y() > 180: pdf.add_page()
@@ -103,7 +128,7 @@ def create_pdf(data, s_t, s_c, logo_path, photos):
             pdf.rect(x_pos, y_fix, img_w, img_h)
             pdf.image(p['img'], x=x_pos+1, y=y_fix+1, w=img_w-2, h=img_h-10)
             pdf.set_xy(x_pos, y_fix + img_h - 7); pdf.set_font("helvetica", 'I', 8)
-            pdf.cell(img_w, 5, f"Photo {i+1}: {p['cap']}", align='C')
+            pdf.cell(img_w, 5, f"Photo {i+1}: {clean_text(p['cap'])}", align='C') # Proteksi caption foto
             if col == 1 or i == len(photos)-1:
                 y_fix += (img_h + 8); pdf.set_y(y_fix)
 
@@ -115,7 +140,7 @@ def create_pdf(data, s_t, s_c, logo_path, photos):
     if s_t: pdf.image(s_t, x=45, y=curr_y + 8, w=30)
     if s_c: pdf.image(s_c, x=135, y=curr_y + 8, w=30)
     pdf.set_y(curr_y + 20); pdf.set_font("helvetica", 'BU', 10)
-    pdf.cell(90, 7, data['cb'], align='C'); pdf.cell(90, 7, data['mw'], align='C')
+    pdf.cell(90, 7, clean_text(data['cb']), align='C'); pdf.cell(90, 7, clean_text(data['mw']), align='C')
     return bytes(pdf.output())
 
 # --- 4. MAIN APPLICATION ---
@@ -134,7 +159,6 @@ else:
 
     with st.sidebar:
         st.header("App Menu")
-        # Safe session check to avoid KeyError
         current_user = st.session_state.get('user_profile', 'User')
         st.write(f"User: **{current_user}**")
         
@@ -145,7 +169,6 @@ else:
         
         st.write("---")
         st.header("Media")
-        # Unique key added to prevent DuplicateElementId
         photo_files = st.file_uploader("Upload Photos", type=["jpg", "png"], accept_multiple_files=True, key="main_photo_uploader")
         caps = [st.text_input(f"Caption {i+1}", key=f"cap_input_{i}") for i in range(len(photo_files))]
 
