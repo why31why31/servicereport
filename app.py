@@ -18,7 +18,7 @@ USER_CREDENTIALS = {
     "admin": "service123"
 }
 
-# --- INISIALISASI DRAFT INDEPENDEN ---
+# --- INDEPENDENT DRAFT INITIALIZATION ---
 if "saved_draft" not in st.session_state:
     st.session_state["saved_draft"] = {
         "cb": "", "cu": "", "mw": "", "status": "Open",
@@ -28,7 +28,7 @@ if "saved_draft" not in st.session_state:
         "c_sig_raw": None
     }
 
-# Versi form digunakan untuk memaksa widget teks & canvas melakukan pembersihan total di layar monitor
+# Form version key used to force clear all visual elements on reset
 if "form_version" not in st.session_state:
     st.session_state["form_version"] = 0
 
@@ -166,7 +166,7 @@ else:
         current_user = st.session_state.get('user_profile', 'User')
         st.write(f"User: **{current_user}**")
         
-        # TOMBOL RESET DRAFT MANUAL TOTAL
+        # MANUAL RESET DRAFT BUTTON
         if st.button("🗑️ Reset Draft Data", use_container_width=True):
             st.session_state["saved_draft"] = {
                 "cb": "", "cu": "", "mw": "", "status": "Open",
@@ -178,6 +178,7 @@ else:
             st.session_state["form_version"] += 1
             st.rerun()
 
+        # SECURE LOGOUT BUTTON
         if st.button("🚪 Logout (Keep Draft)", type="secondary", use_container_width=True):
             if "authenticated" in st.session_state: del st.session_state["authenticated"]
             if "user_profile" in st.session_state: del st.session_state["user_profile"]
@@ -189,13 +190,13 @@ else:
         caps = [st.text_input(f"Caption {i+1}", key=f"cap_input_{i}") for i in range(len(photo_files))]
 
     st.title("Digital Service Report")
-    st.info("💡 **Draft System Active:** Ketikan dan Tanda Tangan Anda tersimpan otomatis meskipun Anda Logout.")
+    st.info("💡 **Draft System Active:** Your typed data and signatures are saved automatically even if you logout.")
     client = get_gspread_client()
 
     draft = st.session_state["saved_draft"]
     v = st.session_state["form_version"]
 
-    # Render Kolom Input Utama
+    # Main Input Form Grid
     col1, col2 = st.columns(2)
     with col1:
         cb = st.text_input("Technician Name", value=draft.get("cb", ""), key=f"w_cb_{v}", on_change=track_change, args=("cb", f"w_cb_{v}"))
@@ -221,7 +222,6 @@ else:
         st.caption("Technician Signature")
         initial_t_sig = draft.get("t_sig_raw")
         
-        # Render canvas murni. Tombol Trash/Undo bawaan komponen dijamin 100% normal tanpa loop macet
         can_t = st_canvas(
             stroke_width=2, height=150, width=330, key=f"t_sig_canvas_{v}", 
             background_color="white", update_streamlit=True,
@@ -232,7 +232,6 @@ else:
         st.caption("Customer Signature")
         initial_c_sig = draft.get("c_sig_raw")
         
-        # Render canvas murni. Tombol Trash/Undo bawaan komponen dijamin 100% normal tanpa loop macet
         can_c = st_canvas(
             stroke_width=2, height=150, width=330, key=f"c_sig_canvas_{v}", 
             background_color="white", update_streamlit=True,
@@ -251,7 +250,7 @@ else:
                 img.thumbnail((800, 800))
                 report_photos.append({'img': img, 'cap': caps[i]})
             
-            # AMANKAN KONDISI CORETIAN SAAT INI MASUK DRAFT FORM SEBELUM GENERATE PDF
+            # Save signature raw JSON to draft data when generating PDF
             st.session_state["saved_draft"]["t_sig_raw"] = can_t.json_data if can_t.json_data else None
             st.session_state["saved_draft"]["c_sig_raw"] = can_c.json_data if can_c.json_data else None
             
@@ -268,7 +267,7 @@ else:
             
             st.session_state['row_data'] = [str(rd), rd.strftime("%A"), cu, ma, ty, sn, pr, fu, cb, status]
             st.session_state['pdf_filename'] = f"Report_{cu}_{rd}.pdf"
-            st.success("PDF Generated Successfully! Tanda tangan tersimpan dalam draft.")
+            st.success("PDF Generated Successfully! Signatures are securely saved in draft.")
 
     if 'final_pdf' in st.session_state:
         st.write("---")
@@ -286,9 +285,9 @@ else:
                     full_row = st.session_state['row_data'] + [hyperlink_formula]
                     sheet.append_row(full_row, value_input_option='USER_ENTERED')
                     sheet.sort((1, 'asc'), range='A2:K5000')
-                    st.success("Data Saved!")
+                    st.success("Data Saved Successfully!")
                     
-                    # Reset data total setelah submit berhasil dilakukan
+                    # Clear out data model states to refresh back to default empty fields
                     st.session_state["saved_draft"] = {
                         "cb": "", "cu": "", "mw": "", "status": "Open",
                         "rd": date.today(), "ma": "Siebler", "ty": "", "sn": "",
