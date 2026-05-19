@@ -88,11 +88,11 @@ def create_pdf(data, s_t, s_c, logo_path, photos):
     
     pdf.set_font("helvetica", 'B', 8.5); pdf.set_fill_color(245, 245, 245)
     
-    # PERBAIKAN STRUKTUR TABEL PDF: Menyusun urutan bidang agar sinkron dengan input form layar
+    # SUDAH DITUKAR: Sekarang Meet with berada di baris ke-2 bersama Date, dan Machine berada di baris ke-3 sesuai form input layar
     fields = [
         [("Complete by", clean_text(data['cb'])), ("Customer", clean_text(data['cu']))],
-        [("Machine", clean_text(data['ma'])), ("Date", clean_text(data['rd']))],
-        [("Meet with", clean_text(data['mw'])), ("Type", clean_text(data['ty'])), ("Serial No", clean_text(data['sn']))]
+        [("Meet with", clean_text(data['mw'])), ("Date", clean_text(data['rd']))],
+        [("Machine", clean_text(data['ma'])), ("Type", clean_text(data['ty'])), ("Serial No", clean_text(data['sn']))]
     ]
     
     for row in fields:
@@ -194,7 +194,6 @@ else:
                         if st.button("🔄 Load ke Form", use_container_width=True):
                             val_list = list(matched_record.values())
                             
-                            # Memuat data kembali ke form berdasarkan urutan penyimpanan barisnya yang presisi
                             st.session_state["rd_key"] = datetime.strptime(val_list[0], "%Y-%m-%d").date() if val_list[0] else date.today()
                             st.session_state["cu_key"] = str(val_list[2])
                             st.session_state["ma_key"] = str(val_list[3])
@@ -204,7 +203,7 @@ else:
                             st.session_state["fu_key"] = str(val_list[7])
                             st.session_state["cb_key"] = str(val_list[8])
                             st.session_state["status_key"] = str(val_list[9])
-                            st.session_state["mw_key"] = ""  # Di-reset kosong karena bidang ini tidak masuk spreadsheet (hanya ada di PDF)
+                            st.session_state["mw_key"] = "" 
                             
                             st.session_state["edit_row_index"] = idx + 2
                             st.success("Data Cloud Berhasil Dimuat ke Form!")
@@ -222,17 +221,17 @@ else:
     st.title("Digital Service Report")
     st.write("Input data servis untuk PT. Finpac Anugerah Indonesia")
 
-    # Form Layout Layar Utama
+    # SUDAH DITUKAR: Menyusun tata letak form input agar urutannya pas kiri-kanan
     with st.form("main_form"):
         col1, col2 = st.columns(2)
         with col1:
             cb = st.text_input("Complete By", key="cb_key")
             cu = st.text_input("Customer", key="cu_key")
-            machine_list = ["Siebler", "Noack", "Kilian", "Romaco", "Promatic", "Truking", "MG2", "FrymaKoruma", "Stephan", "Frewitt", "Lytzen", "Other Machine"]
-            ma = st.selectbox("Machine", machine_list, key="ma_key")
+            mw = st.text_input("Meet With", key="mw_key")  # Pindah ke kolom 1 baris ke-3
             rd = st.date_input("Date", value=date.today(), key="rd_key")
         with col2:
-            mw = st.text_input("Meet With", key="mw_key")
+            machine_list = ["Siebler", "Noack", "Kilian", "Romaco", "Promatic", "Truking", "MG2", "FrymaKoruma", "Stephan", "Frewitt", "Lytzen", "Other Machine"]
+            ma = st.selectbox("Machine", machine_list, key="ma_key")  # Pindah ke kolom 2 baris ke-1
             ty = st.text_input("Type", key="ty_key")
             sn = st.text_input("Serial No", key="sn_key")
             status = st.selectbox("Status", ["Open", "Pending", "Closed"], key="status_key")
@@ -260,7 +259,6 @@ else:
             s_t = Image.fromarray(can_t.image_data.astype('uint8')) if can_t.image_data is not None else None
             s_c = Image.fromarray(can_c.image_data.astype('uint8')) if can_c.image_data is not None else None
             
-            # PENTING: Struktur bundle data pembungkus disesuaikan agar dibaca FPDF secara presisi
             bundle = {'cb':cb, 'cu':cu, 'mw':mw, 'rd':str(rd), 'ma':ma, 'ty':ty, 'sn':sn, 'pr':pr, 'fu':fu}
             st.session_state['final_pdf'] = create_pdf(bundle, s_t, s_c, logo_path, report_photos)
             
