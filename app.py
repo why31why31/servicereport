@@ -158,7 +158,7 @@ else:
         current_user = st.session_state.get('user_profile', 'User')
         st.write(f"User: **{current_user}**")
         
-        # OPSI 2: Logout aman tanpa menghapus isi ketikan form internal browser
+        # OPSI 2: Logout aman tanpa menghapus isi ketikan draft lokal di internal browser
         if st.button("Logout (Keep Local Draft)", use_container_width=True):
             del st.session_state["authenticated"]
             st.rerun()
@@ -171,7 +171,7 @@ else:
         st.write("---")
         st.header("🔍 Load Data Lama")
         
-        # OPSI 1: Tarik data dari Google Sheets untuk dimasukkan kembali ke form key
+        # OPSI 1 FIX: Tarik data lama berdasarkan urutan nomor indeks kolom (Anti-mismatch nama header)
         if client:
             try:
                 spreadsheet = client.open_by_key(SPREADSHEET_ID)
@@ -179,7 +179,11 @@ else:
                 records = sheet.get_all_records()
                 
                 if records:
-                    options = [f"{r.get('Date', '')} | {r.get('Customer Name', r.get('Customer', ''))} | {r.get('Machine', '')}" for r in records]
+                    options = []
+                    for r in records:
+                        row_vals = list(r.values())
+                        options.append(f"{row_vals[0]} | {row_vals[2]} | {row_vals[3]}")
+                        
                     selected_option = st.selectbox("Pilih Laporan Cloud:", ["-- Pilih Laporan --"] + options)
                     
                     if selected_option != "-- Pilih Laporan --":
@@ -187,20 +191,20 @@ else:
                         matched_record = records[idx]
                         
                         if st.button("🔄 Load ke Form", use_container_width=True):
-                            st.session_state["cb_key"] = str(matched_record.get("Complete By", matched_record.get("Technician Name", "")))
-                            st.session_state["cu_key"] = str(matched_record.get("Customer Name", matched_record.get("Customer", "")))
-                            st.session_state["ma_key"] = str(matched_record.get("Machine", "Siebler"))
-                            try:
-                                date_str = matched_record.get("Date", "")
-                                st.session_state["rd_key"] = datetime.strptime(date_str, "%Y-%m-%d").date()
-                            except:
-                                st.session_state["rd_key"] = date.today()
-                            st.session_state["mw_key"] = str(matched_record.get("Meet With", ""))
-                            st.session_state["ty_key"] = str(matched_record.get("Machine Type", ""))
-                            st.session_state["sn_key"] = str(matched_record.get("Serial No", ""))
-                            st.session_state["status_key"] = str(matched_record.get("Status", "Open"))
-                            st.session_state["pr_key"] = str(matched_record.get("Problem Description", ""))
-                            st.session_state["fu_key"] = str(matched_record.get("Action Taken / Follow Up", ""))
+                            val_list = list(matched_record.values())
+                            
+                            # Memuat data kembali ke form berdasarkan urutan penyimpanan barisnya
+                            st.session_state["rd_key"] = datetime.strptime(val_list[0], "%Y-%m-%d").date() if val_list[0] else date.today()
+                            st.session_state["cu_key"] = str(val_list[2])
+                            st.session_state["ma_key"] = str(val_list[3])
+                            st.session_state["ty_key"] = str(val_list[4])
+                            st.session_state["sn_key"] = str(val_list[5])
+                            st.session_state["pr_key"] = str(val_list[6])
+                            st.session_state["fu_key"] = str(val_list[7])
+                            st.session_state["cb_key"] = str(val_list[8])
+                            st.session_state["status_key"] = str(val_list[9])
+                            st.session_state["mw_key"] = "" 
+                            
                             st.session_state["edit_row_index"] = idx + 2
                             st.success("Data Cloud Berhasil Dimuat ke Form!")
                             st.rerun()
@@ -217,7 +221,7 @@ else:
     st.title("Digital Service Report")
     st.write("Input data servis untuk PT. Finpac Anugerah Indonesia")
 
-    # Form terikat langsung menggunakan argumen 'key' widget agar teks tersimpan konstan di memori internal browser
+    # Form dengan parameter key terikat penuh agar draft tidak hilang saat berpindah menu/logout sesaat
     with st.form("main_form"):
         col1, col2 = st.columns(2)
         with col1:
@@ -290,7 +294,7 @@ else:
                         
                     sheet.sort((1, 'asc'), range='A2:K5000')
                     
-                    # Bersihkan session state agar form kembali kosong setelah data resmi masuk cloud
+                    # Reset semua memory setelah data sukses sinkron ke cloud
                     for k in list(st.session_state.keys()): 
                         del st.session_state[k]
                     st.rerun()
