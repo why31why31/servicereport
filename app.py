@@ -5,8 +5,10 @@ from fpdf import FPDF, XPos, YPos
 from streamlit_drawable_canvas import st_canvas
 from PIL import Image
 import os
+import io  
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
+import json
 
 # --- 1. USER ACCESS CONFIG ---
 USER_CREDENTIALS = {
@@ -18,6 +20,23 @@ USER_CREDENTIALS = {
     "admin": "service123"
 }
 
+# --- INDEPENDENT DRAFT INITIALIZATION ---
+if "saved_draft" not in st.session_state:
+    st.session_state["saved_draft"] = {
+        "cb": "", "cu": "", "mw": "", "status": "Open",
+        "rd": date.today(), "ma": "Siebler", "ty": "", "sn": "",
+        "pr": "", "fu": "",
+        "t_sig_raw": None,
+        "c_sig_raw": None
+    }
+
+# Form version key used to force clear all visual elements on reset
+if "form_version" not in st.session_state:
+    st.session_state["form_version"] = 0
+
+if "cloud_sync_completed" not in st.session_state:
+    st.session_state["cloud_sync_completed"] = False
+
 def login_screen():
     st.title("🔐 Finpac Service Portal")
     st.write("Please sign in to continue")
@@ -28,6 +47,7 @@ def login_screen():
             if user in USER_CREDENTIALS and USER_CREDENTIALS[user] == pw:
                 st.session_state["authenticated"] = True
                 st.session_state["user_profile"] = user
+                st.session_state["cloud_sync_completed"] = False  
                 st.rerun()
             else:
                 st.error("Invalid Username or Password")
@@ -35,6 +55,7 @@ def login_screen():
 # --- 2. GOOGLE SHEETS CONFIG ---
 SPREADSHEET_ID = "1g7P6Xkm-G6JE1UR1GLOJ63HISknqdlH21viT2JoC4PY"
 WORKSHEET_NAME = "Daily Report Technic New (2026)"
+DRAFT_WORKSHEET_NAME = "Drafts"
 
 def get_gspread_client():
     try:
@@ -43,8 +64,83 @@ def get_gspread_client():
             scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
             creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_info, scope)
             return gspread.authorize(creds)
-    except:
+    except Exception as e:
         return None
+
+# --- DATABASE PERSISTENCE FUNCTIONS ---
+def save_draft_to_cloud(user_profile):
+    client = get_gspread_client()
+    if not client:
+        return
+    try:
+        spreadsheet = client.open_by_key(SPREADSHEET_ID)
+        try:
+            sheet = spreadsheet.worksheet(DRAFT_WORKSHEET_NAME)
+        except gspread.exceptions.WorksheetNotFound:
+            sheet = spreadsheet.add_worksheet(title=DRAFT_WORKSHEET_NAME, rows="100", cols="15")
+            sheet.append_row(["User", "cb", "cu", "mw", "status", "rd", "ma", "ty", "sn", "pr", "fu", "timestamp"])
+        
+        draft = st.session_state["saved_draft"]
+        row_data = [
+            user_profile,
+            draft.get("cb", ""),
+            draft.get("cu", ""),
+            draft.get("mw", ""),
+            draft.get("status", "Open"),
+            str(draft.get("rd", date.today())),
+            draft.get("ma", "Siebler"),
+            draft.get("ty", ""),
+            draft.get("sn", ""),
+            draft.get("pr", ""),
+            draft.get("fu", ""),
+            datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        ]
+        cell = sheet.find(user_profile, in_column=1)
+        if cell:
+            sheet.update(range_name=f"A{cell.row}:L{cell.row}", values=[row_data])
+        else:
+            sheet.append_row(row_data, value_input_option='USER_ENTERED')
+    except Exception as e:
+        pass
+
+def load_draft_from_cloud(user_profile):
+    client = get_gspread_client()
+    if not client:
+        return
+    try:
+        spreadsheet = client.open_by_key(SPREADSHEET_ID)
+        sheet = spreadsheet.worksheet(DRAFT_WORKSHEET_NAME)
+        cell = sheet.find(user_profile, in_column=1)
+        if cell:
+            row = sheet.row_values(cell.row)
+            st.session_state["saved_draft"]["cb"] = row[1] if len(row) > 1 else ""
+            st.session_state["saved_draft"]["cu"] = row[2] if len(row) > 2 else ""
+            st.session_state["saved_draft"]["mw"] = row[3] if len(row) > 3 else ""
+            st.session_state["saved_draft"]["status"] = row[4] if len(row) > 4 else "Open"
+            try:
+                st.session_state["saved_draft"]["rd"] = datetime.strptime(row[5], "%Y-%m-%d").date() if len(row) > 5 else date.today()
+            except:
+                st.session_state["saved_draft"]["rd"] = date.today()
+            st.session_state["saved_draft"]["ma"] = row[6] if len(row) > 6 else "Siebler"
+            st.session_state["saved_draft"]["ty"] = row[7] if len(row) > 7 else ""
+            st.session_state["saved_draft"]["sn"] = row[8] if len(row) > 8 else ""
+            st.session_state["saved_draft"]["pr"] = row[9] if len(row) > 9 else ""
+            st.session_state["saved_draft"]["fu"] = row[10] if len(row) > 10 else ""
+    except Exception as e:
+        pass
+
+def delete_cloud_draft(user_profile):
+    client = get_gspread_client()
+    if not client:
+        return
+    try:
+        spreadsheet = client.open_by_key(SPREADSHEET_ID)
+        sheet = spreadsheet.worksheet(DRAFT_WORKSHEET_NAME)
+        cell = sheet.find(user_profile, in_column=1)
+        if cell:
+            sheet.delete_rows(cell.row)
+    except Exception as e:
+        pass
 
 # --- UTILS: UNICODE TEXT CLEANER ---
 def clean_text(text):
@@ -72,46 +168,39 @@ class PDF(FPDF):
                 self.set_y(28)
             else:
                 self.set_y(10)
-            self.set_fill_color(41, 128, 185); self.set_text_color(255, 255, 255)
+            self.set_fill_color(41, 128, 185)
+            self.set_text_color(255, 255, 255)
             self.set_font('helvetica', 'B', 14)
             self.cell(0, 10, "SERVICE REPORT", fill=True, align='C', border=0, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-            self.set_text_color(0, 0, 0); self.ln(2)
-            self.set_top_margin(15)
-        else:
-            self.set_top_margin(15)
-            self.set_y(15)
+            self.set_text_color(0, 0, 0)
+            self.ln(2)
 
 def create_pdf(data, s_t, s_c, logo_path, photos):
     pdf = PDF(logo_path=logo_path)
     pdf.set_auto_page_break(auto=True, margin=20)
     pdf.add_page()
     
-    pdf.set_font("helvetica", 'B', 8.5); pdf.set_fill_color(245, 245, 245)
-    
-    # SUDAH DITUKAR: Sekarang Meet with berada di baris ke-2 bersama Date, dan Machine berada di baris ke-3 sesuai form input layar
+    pdf.set_font("helvetica", 'B', 9); pdf.set_fill_color(245, 245, 245)
     fields = [
-        [("Complete by", clean_text(data['cb'])), ("Customer", clean_text(data['cu']))],
-        [("Meet with", clean_text(data['mw'])), ("Date", clean_text(data['rd']))],
-        [("Machine", clean_text(data['ma'])), ("Type", clean_text(data['ty'])), ("Serial No", clean_text(data['sn']))]
+        [("Technician", clean_text(data['cb'])), ("Date", clean_text(data['rd']))],
+        [("Customer", clean_text(data['cu'])), ("Meet with", clean_text(data['mw']))],
+        [("Machine", clean_text(data['ma'])), ("Type", clean_text(data['ty'])), ("S/N", clean_text(data['sn']))]
     ]
-    
     for row in fields:
         for label, value in row:
-            if len(row) == 2:
-                w_lbl, w_val = 25, 65
-            else:
-                w_lbl, w_val = 20, 40
-                if label == "Serial No": w_lbl = 18
-            pdf.set_font("helvetica", 'B', 8.5); pdf.cell(w_lbl, 7, f" {label}:", fill=True)
-            pdf.set_font("helvetica", '', 8.5); pdf.cell(w_val, 7, f" {value}", border='B')
+            pdf.set_font("helvetica", 'B', 9); pdf.cell(25, 7, f" {label}:", fill=True)
+            pdf.set_font("helvetica", '', 9); pdf.cell(65 if len(row)==2 else 35, 7, f" {value}", border='B')
         pdf.ln(9)
     
     pdf.ln(2); pdf.set_font("helvetica", 'B', 10)
     pdf.cell(0, 7, "PROBLEM DESCRIPTION", border='B', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-    pdf.set_font("helvetica", '', 10); pdf.multi_cell(0, 6, clean_text(data['pr'])); pdf.ln(3)
+    pdf.set_font("helvetica", '', 10)
+    pdf.multi_cell(0, 6, clean_text(data['pr']))
+    pdf.ln(3)
     
     pdf.cell(0, 7, "FOLLOW UP ACTION", border='B', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-    pdf.set_font("helvetica", '', 10); pdf.multi_cell(0, 6, clean_text(data['fu']))
+    pdf.set_font("helvetica", '', 10)
+    pdf.multi_cell(0, 6, clean_text(data['fu']))
 
     if photos:
         if pdf.get_y() > 180: pdf.add_page()
@@ -131,15 +220,28 @@ def create_pdf(data, s_t, s_c, logo_path, photos):
             if col == 1 or i == len(photos)-1:
                 y_fix += (img_h + 8); pdf.set_y(y_fix)
 
-    if pdf.get_y() > 220: pdf.add_page()
-    pdf.ln(10); curr_y = pdf.get_y()
+    # --- FIX SIGNATURE FIXED BOTTOM POSITION ---
+    # Jika posisi Y saat ini melebihi batas aman (210), buat halaman baru agar tidak menabrak margin bawah
+    if pdf.get_y() > 210: 
+        pdf.add_page()
+        
+    # Kunci posisi koordinat Y secara absolut di area bawah halaman (235 mm dari tinggi A4 297 mm)
+    fixed_y = 235
+    pdf.set_y(fixed_y)
+    
     pdf.set_font("helvetica", 'B', 10)
     pdf.cell(90, 7, "Service Technician,", align='C')
     pdf.cell(90, 7, "Customer,", align='C')
-    if s_t: pdf.image(s_t, x=45, y=curr_y + 8, w=30)
-    if s_c: pdf.image(s_c, x=135, y=curr_y + 8, w=30)
-    pdf.set_y(curr_y + 20); pdf.set_font("helvetica", 'BU', 10)
-    pdf.cell(90, 7, clean_text(data['cb']), align='C'); pdf.cell(90, 7, clean_text(data['mw']), align='C')
+    
+    # Render gambar tanda tangan relatif terhadap koordinat tetap fixed_y
+    if s_t: pdf.image(s_t, x=45, y=fixed_y + 7, w=30)
+    if s_c: pdf.image(s_c, x=135, y=fixed_y + 7, w=30)
+    
+    pdf.set_y(fixed_y + 20)
+    pdf.set_font("helvetica", 'BU', 10)
+    pdf.cell(90, 7, clean_text(data['cb']), align='C')
+    pdf.cell(90, 7, clean_text(data['mw']), align='C')
+    
     return bytes(pdf.output())
 
 # --- 4. MAIN APPLICATION ---
@@ -147,134 +249,138 @@ if "authenticated" not in st.session_state:
     st.set_page_config(page_title="Login - Service Report", layout="centered")
     login_screen()
 else:
-    if "main_setup_done" not in st.session_state:
-        st.session_state["main_setup_done"] = True
-        st.rerun()
-
     st.set_page_config(page_title="Finpac Service Report", layout="centered")
     st.markdown("<style>iframe{border:1px solid #ddd !important; border-radius:10px; background-color:white;}</style>", unsafe_allow_html=True)
 
-    client = get_gspread_client()
+    current_user = st.session_state.get('user_profile', 'User')
+
+    if not st.session_state["cloud_sync_completed"]:
+        load_draft_from_cloud(current_user)
+        st.session_state["cloud_sync_completed"] = True
+        st.rerun()
+
+    def track_change(field_key, widget_key):
+        st.session_state["saved_draft"][field_key] = st.session_state[widget_key]
+        save_draft_to_cloud(current_user)
 
     with st.sidebar:
         st.header("App Menu")
-        current_user = st.session_state.get('user_profile', 'User')
         st.write(f"User: **{current_user}**")
         
-        if st.button("Logout (Keep Local Draft)", use_container_width=True):
-            del st.session_state["authenticated"]
+        if st.button("🗑️ Reset Draft Data", use_container_width=True):
+            st.session_state["saved_draft"] = {
+                "cb": "", "cu": "", "mw": "", "status": "Open",
+                "rd": date.today(), "ma": "Siebler", "ty": "", "sn": "",
+                "pr": "", "fu": "",
+                "t_sig_raw": None, "c_sig_raw": None
+            }
+            if 'final_pdf' in st.session_state: del st.session_state['final_pdf']
+            delete_cloud_draft(current_user)  
+            st.session_state["form_version"] += 1
             st.rerun()
-            
-        if st.button("⚠️ Clear Form & Hard Reset", use_container_width=True, type="secondary"):
-            for key in list(st.session_state.keys()): 
-                del st.session_state[key]
-            st.rerun()
-        
-        st.write("---")
-        st.header("🔍 Load Data Lama")
-        
-        if client:
-            try:
-                spreadsheet = client.open_by_key(SPREADSHEET_ID)
-                sheet = spreadsheet.worksheet(WORKSHEET_NAME)
-                records = sheet.get_all_records()
-                
-                if records:
-                    options = []
-                    for r in records:
-                        row_vals = list(r.values())
-                        options.append(f"{row_vals[0]} | {row_vals[2]} | {row_vals[3]}")
-                        
-                    selected_option = st.selectbox("Pilih Laporan Cloud:", ["-- Pilih Laporan --"] + options)
-                    
-                    if selected_option != "-- Pilih Laporan --":
-                        idx = options.index(selected_option)
-                        matched_record = records[idx]
-                        
-                        if st.button("🔄 Load ke Form", use_container_width=True):
-                            val_list = list(matched_record.values())
-                            
-                            st.session_state["rd_key"] = datetime.strptime(val_list[0], "%Y-%m-%d").date() if val_list[0] else date.today()
-                            st.session_state["cu_key"] = str(val_list[2])
-                            st.session_state["ma_key"] = str(val_list[3])
-                            st.session_state["ty_key"] = str(val_list[4])
-                            st.session_state["sn_key"] = str(val_list[5])
-                            st.session_state["pr_key"] = str(val_list[6])
-                            st.session_state["fu_key"] = str(val_list[7])
-                            st.session_state["cb_key"] = str(val_list[8])
-                            st.session_state["status_key"] = str(val_list[9])
-                            st.session_state["mw_key"] = "" 
-                            
-                            st.session_state["edit_row_index"] = idx + 2
-                            st.success("Data Cloud Berhasil Dimuat ke Form!")
-                            st.rerun()
-                else:
-                    st.info("Belum ada data di spreadsheet.")
-            except Exception as e:
-                st.sidebar.error(f"Gagal memuat daftar: {e}")
 
+        if st.button("🚪 Logout (Keep Draft)", type="secondary", use_container_width=True):
+            if "authenticated" in st.session_state: del st.session_state["authenticated"]
+            if "user_profile" in st.session_state: del st.session_state["user_profile"]
+            st.session_state["cloud_sync_completed"] = False
+            st.rerun()
+        
         st.write("---")
-        st.header("Media")
+        st.header("Media Attachments")
         photo_files = st.file_uploader("Upload Photos", type=["jpg", "png"], accept_multiple_files=True, key="main_photo_uploader")
         caps = [st.text_input(f"Caption {i+1}", key=f"cap_input_{i}") for i in range(len(photo_files))]
 
     st.title("Digital Service Report")
-    st.write("Input data servis untuk PT. Finpac Anugerah Indonesia")
+    st.success("☁️ **Cloud Draft System Enabled:** Even if the web platform completely restarts, your written inputs are safe.")
+    client = get_gspread_client()
 
-    # SUDAH DITUKAR: Menyusun tata letak form input agar urutannya pas kiri-kanan
-    with st.form("main_form"):
-        col1, col2 = st.columns(2)
-        with col1:
-            cb = st.text_input("Complete By", key="cb_key")
-            cu = st.text_input("Customer", key="cu_key")
-            mw = st.text_input("Meet With", key="mw_key")  # Pindah ke kolom 1 baris ke-3
-            rd = st.date_input("Date", value=date.today(), key="rd_key")
-        with col2:
-            machine_list = ["Siebler", "Noack", "Kilian", "Romaco", "Promatic", "Truking", "MG2", "FrymaKoruma", "Stephan", "Frewitt", "Lytzen", "Other Machine"]
-            ma = st.selectbox("Machine", machine_list, key="ma_key")  # Pindah ke kolom 2 baris ke-1
-            ty = st.text_input("Type", key="ty_key")
-            sn = st.text_input("Serial No", key="sn_key")
-            status = st.selectbox("Status", ["Open", "Pending", "Closed"], key="status_key")
-            
-        pr = st.text_area("Problem Description", key="pr_key")
-        fu = st.text_area("Action Taken / Follow Up", key="fu_key")
-        st.form_submit_button("Lock Data")
+    draft = st.session_state["saved_draft"]
+    v = st.session_state["form_version"]
+
+    col1, col2 = st.columns(2)
+    with col1:
+        cb = st.text_input("Technician Name", value=draft.get("cb", ""), key=f"w_cb_{v}", on_change=track_change, args=("cb", f"w_cb_{v}"))
+        cu = st.text_input("Customer Name", value=draft.get("cu", ""), key=f"w_cu_{v}", on_change=track_change, args=("cu", f"w_cu_{v}"))
+        mw = st.text_input("Meet With", value=draft.get("mw", ""), key=f"w_mw_{v}", on_change=track_change, args=("mw", f"w_mw_{v}"))
+        status_options = ["Open", "Pending", "Closed"]
+        status = st.selectbox("Status", status_options, index=status_options.index(draft.get("status", "Open")), key=f"w_status_{v}", on_change=track_change, args=("status", f"w_status_{v}"))
+    with col2:
+        rd = st.date_input("Date", value=draft.get("rd", date.today()), key=f"w_rd_{v}", on_change=track_change, args=("rd", f"w_rd_{v}"))
+        machine_options = ["Siebler", "Noack", "Kilian", "Promatic", "Truking", "MG2", "FrymaKoruma", "Stephan", "Frewitt", "Lytzen", "Other Machine"]
+        ma = st.selectbox("Machine", machine_options, index=machine_options.index(draft.get("ma", "Siebler")), key=f"w_ma_{v}", on_change=track_change, args=("ma", f"w_ma_{v}"))
+        ty = st.text_input("Machine Type", value=draft.get("ty", ""), key=f"w_ty_{v}", on_change=track_change, args=("ty", f"w_ty_{v}"))
+        sn = st.text_input("Serial No", value=draft.get("sn", ""), key=f"w_sn_{v}", on_change=track_change, args=("sn", f"w_sn_{v}"))
+        
+    pr = st.text_area("Problem Description", value=draft.get("pr", ""), key=f"w_pr_{v}", on_change=track_change, args=("pr", f"w_pr_{v}"))
+    fu = st.text_area("Action Taken / Follow Up", value=draft.get("fu", ""), key=f"w_fu_{v}", on_change=track_change, args=("fu", f"w_fu_{v}"))
 
     st.write("---")
     st.write("### Signatures")
-    can_t = st_canvas(stroke_width=2, height=150, width=400, key="t_sig", background_color="white")
-    can_c = st_canvas(stroke_width=2, height=150, width=400, key="c_sig", background_color="white")
+    sig_col1, sig_col2 = st.columns(2)
+    
+    with sig_col1:
+        st.caption("Technician Signature")
+        initial_t_sig = draft.get("t_sig_raw")
+        can_t = st_canvas(
+            stroke_width=2, height=150, width=330, key=f"t_sig_canvas_{v}", 
+            background_color="white", update_streamlit=True,
+            initial_drawing=initial_t_sig if initial_t_sig else None
+        )
 
+    with sig_col2:
+        st.caption("Customer Signature")
+        initial_c_sig = draft.get("c_sig_raw")
+        can_c = st_canvas(
+            stroke_width=2, height=150, width=330, key=f"c_sig_canvas_{v}", 
+            background_color="white", update_streamlit=True,
+            initial_drawing=initial_c_sig if initial_c_sig else None
+        )
+
+    st.write("---")
     if st.button("🚀 GENERATE PDF REPORT", type="primary", use_container_width=True):
         if not cb:
-            st.error("Complete By field (Technician Name) is required!")
+            st.error("Technician Name is required before generating report!")
         else:
             logo_path = "logo.png" 
             report_photos = []
+            
             for i, pf in enumerate(photo_files):
                 img = Image.open(pf)
                 img.thumbnail((800, 800))
-                report_photos.append({'img': img, 'cap': caps[i]})
+                if img.mode in ("RGBA", "P"):
+                    img = img.convert("RGB")
+                
+                buffer = io.BytesIO()
+                img.save(buffer, format="JPEG", quality=75, optimize=True)
+                buffer.seek(0)
+                
+                compressed_img = Image.open(buffer)
+                report_photos.append({'img': compressed_img, 'cap': caps[i]})
             
-            s_t = Image.fromarray(can_t.image_data.astype('uint8')) if can_t.image_data is not None else None
-            s_c = Image.fromarray(can_c.image_data.astype('uint8')) if can_c.image_data is not None else None
+            st.session_state["saved_draft"]["t_sig_raw"] = can_t.json_data if can_t.json_data else None
+            st.session_state["saved_draft"]["c_sig_raw"] = can_c.json_data if can_c.json_data else None
             
-            bundle = {'cb':cb, 'cu':cu, 'mw':mw, 'rd':str(rd), 'ma':ma, 'ty':ty, 'sn':sn, 'pr':pr, 'fu':fu}
+            s_t = None
+            if can_t.image_data is not None and can_t.json_data and can_t.json_data.get("objects"):
+                s_t = Image.fromarray(can_t.image_data.astype('uint8'))
+                
+            s_c = None
+            if can_c.image_data is not None and can_c.json_data and can_c.json_data.get("objects"):
+                s_c = Image.fromarray(can_c.image_data.astype('uint8'))
+            
+            bundle = {'cb': cb, 'cu': cu, 'mw': mw, 'rd': str(rd), 'ma': ma, 'ty': ty, 'sn': sn, 'pr': pr, 'fu': fu}
             st.session_state['final_pdf'] = create_pdf(bundle, s_t, s_c, logo_path, report_photos)
             
             st.session_state['row_data'] = [str(rd), rd.strftime("%A"), cu, ma, ty, sn, pr, fu, cb, status]
             st.session_state['pdf_filename'] = f"Report_{cu}_{rd}.pdf"
-            st.success("PDF Generated Successfully!")
+            st.success("PDF Generated Successfully! Draft values secured.")
 
     if 'final_pdf' in st.session_state:
         st.write("---")
         st.download_button("📥 DOWNLOAD PDF", data=st.session_state['final_pdf'], file_name=st.session_state['pdf_filename'], use_container_width=True)
         g_link = st.text_input("Paste GDrive Link here:")
         
-        is_editing = st.session_state.get("edit_row_index") is not None
-        btn_label = "💾 UPDATE DATA DI SPREADSHEET & RESET" if is_editing else "💾 SAVE TO SPREADSHEET & RESET"
-        
-        if st.button(btn_label, use_container_width=True):
+        if st.button("💾 SAVE TO SPREADSHEET & RESET", use_container_width=True):
             if not g_link:
                 st.warning("Please paste the GDrive link first.")
             elif client:
@@ -283,19 +389,21 @@ else:
                     sheet = spreadsheet.worksheet(WORKSHEET_NAME)
                     hyperlink_formula = f'=HYPERLINK("{g_link}";"{st.session_state["pdf_filename"]}")'
                     full_row = st.session_state['row_data'] + [hyperlink_formula]
-                    
-                    if is_editing:
-                        row_num = st.session_state["edit_row_index"]
-                        sheet.update(range_name=f"A{row_num}:K{row_num}", values=[full_row], value_input_option='USER_ENTERED')
-                        st.success(f"Data pada Baris {row_num} Berhasil Di-update!")
-                    else:
-                        sheet.append_row(full_row, value_input_option='USER_ENTERED')
-                        st.success("Data Baru Berhasil Disimpan!")
-                        
+                    sheet.append_row(full_row, value_input_option='USER_ENTERED')
                     sheet.sort((1, 'asc'), range='A2:K5000')
+                    st.success("Data Saved Successfully!")
                     
-                    for k in list(st.session_state.keys()): 
-                        del st.session_state[k]
+                    delete_cloud_draft(current_user)
+                    st.session_state["saved_draft"] = {
+                        "cb": "", "cu": "", "mw": "", "status": "Open",
+                        "rd": date.today(), "ma": "Siebler", "ty": "", "sn": "",
+                        "pr": "", "fu": "",
+                        "t_sig_raw": None, "c_sig_raw": None
+                    }
+                    for k in ["final_pdf", "row_data", "pdf_filename"]:
+                        if k in st.session_state: del st.session_state[k]
+                    st.session_state["form_version"] += 1
                     st.rerun()
                 except Exception as e:
                     st.error(f"Spreadsheet Error: {e}")
+    
