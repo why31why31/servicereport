@@ -221,11 +221,9 @@ def create_pdf(data, s_t, s_c, logo_path, photos):
                 y_fix += (img_h + 8); pdf.set_y(y_fix)
 
     # --- FIX SIGNATURE FIXED BOTTOM POSITION ---
-    # Jika posisi Y saat ini melebihi batas aman (210), buat halaman baru agar tidak menabrak margin bawah
     if pdf.get_y() > 210: 
         pdf.add_page()
         
-    # Kunci posisi koordinat Y secara absolut di area bawah halaman (235 mm dari tinggi A4 297 mm)
     fixed_y = 235
     pdf.set_y(fixed_y)
     
@@ -233,7 +231,6 @@ def create_pdf(data, s_t, s_c, logo_path, photos):
     pdf.cell(90, 7, "Service Technician,", align='C')
     pdf.cell(90, 7, "Customer,", align='C')
     
-    # Render gambar tanda tangan relatif terhadap koordinat tetap fixed_y
     if s_t: pdf.image(s_t, x=45, y=fixed_y + 7, w=30)
     if s_c: pdf.image(s_c, x=135, y=fixed_y + 7, w=30)
     
@@ -338,8 +335,17 @@ else:
 
     st.write("---")
     if st.button("🚀 GENERATE PDF REPORT", type="primary", use_container_width=True):
+        
+        # Check if the canvases contain any drawn stroke objects
+        has_t_sig = can_t is not None and can_t.json_data is not None and len(can_t.json_data.get("objects", [])) > 0
+        has_c_sig = can_c is not None and can_c.json_data is not None and len(can_c.json_data.get("objects", [])) > 0
+
         if not cb:
             st.error("Technician Name is required before generating report!")
+        elif not has_t_sig:
+            st.error("Technician Signature is required!")
+        elif not has_c_sig:
+            st.error("Customer Signature is required!")
         else:
             logo_path = "logo.png" 
             report_photos = []
@@ -361,12 +367,14 @@ else:
             st.session_state["saved_draft"]["c_sig_raw"] = can_c.json_data if can_c.json_data else None
             
             s_t = None
-            if can_t.image_data is not None and can_t.json_data and can_t.json_data.get("objects"):
-                s_t = Image.fromarray(can_t.image_data.astype('uint8'))
-                
+            if can_t is not None and can_t.json_data and can_t.json_data.get("objects"):
+                if can_t.image_data is not None:
+                    s_t = Image.fromarray(can_t.image_data.astype('uint8'))
+                    
             s_c = None
-            if can_c.image_data is not None and can_c.json_data and can_c.json_data.get("objects"):
-                s_c = Image.fromarray(can_c.image_data.astype('uint8'))
+            if can_c is not None and can_c.json_data and can_c.json_data.get("objects"):
+                if can_c.image_data is not None:
+                    s_c = Image.fromarray(can_c.image_data.astype('uint8'))
             
             bundle = {'cb': cb, 'cu': cu, 'mw': mw, 'rd': str(rd), 'ma': ma, 'ty': ty, 'sn': sn, 'pr': pr, 'fu': fu}
             st.session_state['final_pdf'] = create_pdf(bundle, s_t, s_c, logo_path, report_photos)
@@ -406,4 +414,3 @@ else:
                     st.rerun()
                 except Exception as e:
                     st.error(f"Spreadsheet Error: {e}")
-    
